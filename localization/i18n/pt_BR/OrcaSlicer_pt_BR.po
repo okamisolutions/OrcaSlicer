@@ -8763,6 +8763,15 @@ msgstr "Sincronizar lista de filamentos do AMS"
 msgid "Set filaments to use"
 msgstr "Definir filamentos para usar"
 
+# AI Translated
+msgid "Use the last assigned filament for new objects"
+msgstr "Usar o último filamento atribuído em novos objetos"
+
+# AI Translated
+#, c-format, boost-format
+msgid "Last assigned filament: %d"
+msgstr "Último filamento atribuído: %d"
+
 msgid "Add Mixed Filament"
 msgstr "Adicionar Filamento Misto"
 
@@ -29864,6 +29873,62 @@ msgstr ""
 
 msgid "Medium spring green"
 msgstr ""
+
+# AI Translated
+msgid "Add as an extra test"
+msgstr "Adicionar como teste extra"
+
+# AI Translated
+msgid ""
+"Keep the tests already on the plate and add this one, with its own values, printed with the filament "
+"chosen below. The plate is printed by object: one test after the other, changing the filament between them."
+msgstr ""
+"Mantém os testes que já estão na mesa e adiciona este, com seus próprios valores, impresso com o filamento "
+"escolhido abaixo. A mesa é impressa por objeto: um teste depois do outro, trocando o filamento entre eles."
+
+# AI Translated
+msgid "This test cannot share the plate with other tests. Start it without \"Add as an extra test\"."
+msgstr "Este teste não pode dividir a mesa com outros testes. Inicie-o sem \"Adicionar como teste extra\"."
+
+# AI Translated
+msgid "Extra tests on one plate are not available on belt printers yet."
+msgstr "Testes extras na mesma mesa ainda não estão disponíveis em impressoras de esteira."
+
+# AI Translated
+msgid "Flow ratio tests can only share the plate with other flow ratio tests."
+msgstr "Testes de fluxo só podem dividir a mesa com outros testes de fluxo."
+
+# AI Translated
+msgid "Print sequence set to \"By object\", so that the objects are printed one after the other."
+msgstr "Sequência de impressão mudada para \"Por objeto\", para imprimir os objetos um depois do outro."
+
+# AI Translated
+msgid ""
+"There is no room on the plate to keep the new objects far enough from the others. Remove an object or "
+"rearrange the plate."
+msgstr ""
+"Não há espaço na mesa para manter os objetos novos longe o suficiente dos outros. Remova um objeto ou "
+"reorganize a mesa."
+
+# AI Translated
+msgid "Filament of the new objects:"
+msgstr "Filamento dos objetos novos:"
+
+# AI Translated
+msgid "Add Models with Another Filament"
+msgstr "Adicionar modelos com outro filamento"
+
+# AI Translated
+msgid "Import with Another Filament"
+msgstr "Importar com outro filamento"
+
+# AI Translated
+msgid "Load models printed with the chosen filament, by object, apart from the other objects of the plate"
+msgstr "Carrega modelos impressos com o filamento escolhido, por objeto, afastados dos outros objetos da mesa"
+
+# AI Translated
+msgid "Several calibration tests on one plate need the \"By object\" print sequence."
+msgstr "Vários testes de calibração na mesma mesa precisam da sequência de impressão \"Por objeto\"."
 
 msgid "Lime"
 msgstr ""

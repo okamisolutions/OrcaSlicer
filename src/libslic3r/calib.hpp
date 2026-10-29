@@ -55,6 +55,9 @@ struct Calib_Params
     // Scale the calibration model to the nozzle diameter and set the layer height accordingly (temp tower / VFA).
     // When false the 0.4 mm / 0.2 mm reference model is printed as-is.
     bool nozzle_based_resize = true;
+    // ORCA: > 0 adds the test next to the objects already on the plate, printed with this filament (1-based),
+    // instead of starting a new project. Each test object keeps its own parameters, see Print::calib_params_for().
+    int extra_filament_id = 0;
 
     CalibMode mode;
 };
@@ -245,6 +248,9 @@ protected:
 
     Vec3d m_last_pos;
     DynamicPrintConfig m_config;
+    // Zero based indices of the filament the test is printed with and of its extruder (nozzle).
+    size_t m_filament_idx{0};
+    size_t m_extruder_idx{0};
 
     const double m_encroachment{1. / 3.};
     DrawDigitMode                m_draw_digit_mode{DrawDigitMode::Left_To_Right};

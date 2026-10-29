@@ -298,6 +298,8 @@ public:
     // Step will create equal layers steps from first to last value.
     // Step = 0 means gradual interpolation finishing at last value.
     float interpolate_value_across_layers(float start_value, float end_value, float step = 0.0f) const;
+    // Same, for the layer layer_idx of layer_count layers.
+    static float interpolate_value_across_layers(float start_value, float end_value, float step, int layer_idx, unsigned int layer_count);
 
     // For Perl bindings, to be used exclusively by unit tests.
     unsigned int    layer_count() const { return m_layer_count; }
@@ -720,6 +722,11 @@ protected:
     Vec2d                               m_origin;
     FullPrintConfig                     m_config;
     DynamicConfig                       m_calib_config;
+    // ORCA: calibration mode of the object printed at the current layer (Print::calib_params_for()).
+    CalibMode                           m_layer_calib_mode{ CalibMode::Calib_None };
+    // A calibration object changed the pressure advance / retraction length, restore them for the next object.
+    bool                                m_calib_pa_changed{ false };
+    bool                                m_calib_retraction_changed{ false };
     // scaled G-code resolution
     double                              m_scaled_resolution;
     GCodeWriter                         m_writer;
@@ -932,6 +939,7 @@ protected:
     // BBS
     int get_bed_temperature(const int extruder_id, const bool is_first_layer, const BedType bed_type) const;
     int get_highest_bed_temperature(const bool is_first_layer,const Print &print) const;
+    int get_object_bed_temperature(const PrintObject &object, const bool is_first_layer, const int first_extruder_id) const;
 
     void update_layer_related_config(int layer_id);
 
@@ -939,7 +947,8 @@ protected:
     std::string _extrude(const ExtrusionPath &path, const std::string &path_description = "", double speed = -1);
     bool _needSAFC(const ExtrusionPath &path);
     void print_machine_envelope(GCodeOutputStream& file, Print& print);
-    void _print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait);
+    void _print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait,
+                                            const PrintObject *object = nullptr);
     void _print_first_layer_extruder_temperatures(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait);
     // On the first printing layer. This flag triggers first layer speeds.
     //BBS

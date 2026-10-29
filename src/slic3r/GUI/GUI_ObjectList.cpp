@@ -1175,6 +1175,7 @@ void ObjectList::update_filament_in_config(const wxDataViewItem& item)
 
     const int extruder = m_objects_model->GetExtruderNumber(item);
     m_config->set_key_value("extruder", new ConfigOptionInt(extruder));
+    wxGetApp().sidebar().remember_last_used_filament(extruder);
 
     // BBS
     if (item_type & itObject) {
@@ -2693,7 +2694,7 @@ void ObjectList::load_mesh_object(const std::vector<std::pair<const TriangleMesh
     new_object->sort_volumes(true);
     // set a default extruder value, since user can't add it manually
     // BBS
-    new_object->config.set_key_value("extruder", new ConfigOptionInt(1));
+    new_object->config.set_key_value("extruder", new ConfigOptionInt(wxGetApp().sidebar().filament_for_new_objects()));
     new_object->invalidate_bounding_box();
     new_object->translate(-bb.center());
 
@@ -6886,6 +6887,8 @@ void ObjectList::set_extruder_for_selected_items(const int extruder)
         const wxString extruder_str = wxString::Format("%d", new_extruder);
         m_objects_model->SetExtruder(extruder_str, item);
     }
+
+    wxGetApp().sidebar().remember_last_used_filament(extruder);
 
     // update scene
     wxGetApp().plater()->update();

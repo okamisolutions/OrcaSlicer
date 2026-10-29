@@ -551,6 +551,50 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
 void Print::set_calib_params(const Calib_Params& params) {
     m_calib_params = params;
     m_calib_params.mode = params.mode;
+    m_object_calib_params.clear();
+}
+
+void Print::set_object_calib_params(ObjectID model_object_id, const Calib_Params& params)
+{
+    m_object_calib_params[model_object_id] = params;
+    // Loading a model resets the print's calibration mode, keep it pointing at a calibration in use.
+    if (m_calib_params.mode == CalibMode::Calib_None)
+        m_calib_params = params;
+}
+
+const Calib_Params* Print::object_calib_params(ObjectID model_object_id) const
+{
+    auto it = m_object_calib_params.find(model_object_id);
+    return it == m_object_calib_params.end() ? nullptr : &it->second;
+}
+
+bool Print::has_object_calib_params() const
+{
+    if (m_object_calib_params.empty())
+        return false;
+    for (const PrintObject *object : m_objects)
+        if (m_object_calib_params.count(object->model_object()->id()))
+            return true;
+    return false;
+}
+
+const Calib_Params& Print::calib_params_for(const PrintObject* object) const
+{
+    static const Calib_Params no_calibration;
+    if (!has_object_calib_params())
+        return m_calib_params;
+    auto it = object ? m_object_calib_params.find(object->model_object()->id()) : m_object_calib_params.end();
+    return it == m_object_calib_params.end() ? no_calibration : it->second;
+}
+
+bool Print::has_calib_mode(CalibMode mode) const
+{
+    if (!has_object_calib_params())
+        return m_calib_params.mode == mode;
+    for (const PrintObject *object : m_objects)
+        if (calib_params_for(object).mode == mode)
+            return true;
+    return false;
 }
 
 bool Print::invalidate_step(PrintStep step)
@@ -2105,6 +2149,13 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                 return ret;
         }
     }
+
+    // ORCA: calibration objects with their own parameters change them layer by layer, so each one must be
+    // printed on its own.
+    if (m_config.print_sequence != PrintSequence::ByObject && has_object_calib_params() &&
+        std::count_if(m_objects.begin(), m_objects.end(),
+                      [this](const PrintObject *object) { return calib_params_for(object).mode != CalibMode::Calib_None; }) > 1)
+        return { L("Several calibration tests on one plate need the \"By object\" print sequence."), nullptr, "print_sequence" };
 
     if (m_config.print_sequence == PrintSequence::ByObject && (m_objects.size() > 1 || m_objects[0]->instances().size() > 1)) {
         if (m_config.timelapse_type == TimelapseType::tlSmooth)
