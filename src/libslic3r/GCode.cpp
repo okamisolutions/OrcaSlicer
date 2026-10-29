@@ -2977,19 +2977,17 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
     const bool skip_config_block = print.config().gcode_skip_config_block;
     const WipeTowerType wipe_tower_type = print.wipe_tower_type();
     m_calib_config.clear();
+    m_layer_calib_mode         = CalibMode::Calib_None;
+    m_calib_pa_changed         = false;
+    m_calib_retraction_changed = false;
     // Orca: Calibration overrides are reapplied after object/region settings in _extrude().
     // Keep inward wiping from masking retraction and pressure advance artifacts.
-    switch (print.calib_mode()) {
-    case CalibMode::Calib_PA_Line:
-    case CalibMode::Calib_PA_Pattern:
-    case CalibMode::Calib_PA_Tower:
-    case CalibMode::Calib_Auto_PA_Line:
-    case CalibMode::Calib_Retraction_tower:
-        m_calib_config.set_key_value("wipe_inward", new ConfigOptionBool(false));
-        break;
-    default:
-        break;
-    }
+    for (CalibMode mode : {CalibMode::Calib_PA_Line, CalibMode::Calib_PA_Pattern, CalibMode::Calib_PA_Tower,
+                           CalibMode::Calib_Auto_PA_Line, CalibMode::Calib_Retraction_tower})
+        if (print.has_calib_mode(mode)) {
+            m_calib_config.set_key_value("wipe_inward", new ConfigOptionBool(false));
+            break;
+        }
     // resets analyzer's tracking data
     m_last_height  = 0.f;
     m_last_layer_z = 0.f;
@@ -3620,7 +3618,9 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
         const ConfigOptionInts* first_bed_temp_opt = m_config.option<ConfigOptionInts>(get_bed_temp_1st_layer_key((BedType)curr_bed_type));
         const ConfigOptionInts* bed_temp_opt = m_config.option<ConfigOptionInts>(get_bed_temp_key((BedType)curr_bed_type));
         int target_bed_temp = 0;
-        if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
+        if (print.config().print_sequence == PrintSequence::ByObject && !print_object_instances_ordering.empty())
+            target_bed_temp = get_object_bed_temperature(*(*first_has_extrude_print_object)->print_object, true, int(initial_extruder_id));
+        else if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
             target_bed_temp = get_highest_bed_temperature(true, print);
         else
             target_bed_temp = get_bed_temperature(initial_extruder_id, true, curr_bed_type);
@@ -3889,7 +3889,10 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
 
         CalibPressureAdvanceLine pa_test(this);
 
-        auto fast_speed = CalibPressureAdvance::find_optimal_PA_speed(print.full_print_config(), pa_test.line_width(), pa_test.height_layer());
+        // Cap the speed with the volumetric limit of the filament that prints the lines.
+        const Extruder *pa_filament = m_writer.filament();
+        auto fast_speed = CalibPressureAdvance::find_optimal_PA_speed(print.full_print_config(), pa_test.line_width(), pa_test.height_layer(), 0,
+                                                                      pa_filament ? int(pa_filament->id()) : 0);
         auto slow_speed = std::max(10.0, fast_speed / 10.0);
         if (fast_speed < slow_speed + 5)
             fast_speed = slow_speed + 5;
@@ -3966,8 +3969,13 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
                     this->placeholder_parser().set("current_object_idx", int(finished_objects));
                     std::string printing_by_object_gcode = this->placeholder_parser_process("printing_by_object_gcode", print.config().printing_by_object_gcode.value, initial_extruder_id);
                     // Set first layer bed and extruder temperatures, don't wait for it to reach the temperature.
-                    this->_print_first_layer_bed_temperature(file, print, printing_by_object_gcode, initial_extruder_id, false);
+                    // ORCA: the bed follows this object's filaments; wait when it has to heat up, so that the first layer sticks.
+                    const bool heat_bed_up = get_object_bed_temperature(object, true, int(initial_extruder_id)) > m_writer.last_bed_temperature();
+                    this->_print_first_layer_bed_temperature(file, print, printing_by_object_gcode, initial_extruder_id, heat_bed_up, &object);
                     this->_print_first_layer_extruder_temperatures(file, print, printing_by_object_gcode, initial_extruder_id, false);
+                    // ORCA: a temperature tower starts at its own temperature, not at its filament's one.
+                    if (const Calib_Params &calib = print.calib_params_for(&object); calib.mode == CalibMode::Calib_Temp_Tower)
+                        file.write(m_writer.set_temperature(static_cast<unsigned int>(std::lround(calib.start)), true));
                     file.writeln(printing_by_object_gcode);
                 }
                 // Reset the cooling buffer internal state (the current position, feed rate, accelerations).
@@ -4741,17 +4749,33 @@ int GCode::get_highest_bed_temperature(const bool is_first_layer, const Print& p
     return bed_temp;
 }
 
+// ORCA: printed by object, the bed follows the filaments of the object being printed, so that a PLA object is not
+// printed on a bed heated for the PETG object sharing the plate.
+int GCode::get_object_bed_temperature(const PrintObject &object, const bool is_first_layer, const int first_extruder_id) const
+{
+    if (m_config.bed_temperature_formula != BedTempFormula::btfHighestTemp)
+        return get_bed_temperature(first_extruder_id, is_first_layer, m_config.curr_bed_type);
+    int bed_temp = 0;
+    for (unsigned int extruder_id : object.object_extruders())
+        bed_temp = std::max(bed_temp, get_bed_temperature(int(extruder_id), is_first_layer, m_config.curr_bed_type));
+    return bed_temp > 0 ? bed_temp : get_bed_temperature(first_extruder_id, is_first_layer, m_config.curr_bed_type);
+}
+
 // Write 1st layer bed temperatures into the G-code.
 // Only do that if the start G-code does not already contain any M-code controlling an extruder temperature.
 // M140 - Set Extruder Temperature
 // M190 - Set Extruder Temperature and Wait
-void GCode::_print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait)
+void GCode::_print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait,
+                                               const PrintObject *object)
 {
     // Initial bed temperature based on the first extruder.
     // BBS
     std::vector<int> temps_per_bed;
     int bed_temp = 0;
-    if (m_config.bed_temperature_formula.value == BedTempFormula::btfHighestTemp) {
+    if (object != nullptr) {
+        bed_temp = get_object_bed_temperature(*object, true, int(first_printing_extruder_id));
+    }
+    else if (m_config.bed_temperature_formula.value == BedTempFormula::btfHighestTemp) {
         bed_temp = get_highest_bed_temperature(true, print);
     }
     else {
@@ -5735,54 +5759,80 @@ LayerResult GCode::process_layer(
     gcode += ";_SET_FAN_SPEED_CHANGING_LAYER\n";
 
     //Calibration Layer-specific GCode
-    switch (print.calib_mode()) {
+    // ORCA: with per-object calibrations each test object (printed by object) steps across its own layers.
+    const Calib_Params &calib_params     = print.calib_params_for(layer.object());
+    const bool          per_object_calib = print.has_object_calib_params() && print.config().print_sequence == PrintSequence::ByObject;
+    auto interpolate = [&](float start_value, float end_value, float step = 0.f) {
+        return per_object_calib ? interpolate_value_across_layers(start_value, end_value, step, int(layer.id()), unsigned(layer.object()->layer_count())) :
+                                  this->interpolate_value_across_layers(start_value, end_value, step);
+    };
+    m_layer_calib_mode = calib_params.mode;
+    // Give an object printed after a calibration object its own pressure advance, retraction and speed back.
+    if (m_calib_pa_changed && calib_params.mode != CalibMode::Calib_PA_Tower) {
+        const unsigned int filament_id = m_writer.filament()->id();
+        if (m_config.enable_pressure_advance.get_at(filament_id))
+            gcode += writer().set_pressure_advance(m_config.pressure_advance.get_at(filament_id));
+        m_calib_pa_changed = false;
+    }
+    if (m_calib_retraction_changed && calib_params.mode != CalibMode::Calib_Retraction_tower) {
+        DynamicConfig _cfg;
+        _cfg.set_key_value("retraction_length", print.config().retraction_length.clone());
+        writer().config.apply(_cfg);
+        m_calib_retraction_changed = false;
+    }
+    if (calib_params.mode != CalibMode::Calib_VFA_Tower && calib_params.mode != CalibMode::Calib_Vol_speed_Tower)
+        m_calib_config.erase("outer_wall_speed");
+
+    switch (calib_params.mode) {
         case CalibMode::Calib_PA_Tower: {
-            gcode += writer().set_pressure_advance(this->interpolate_value_across_layers(static_cast<float>(print.calib_params().start),
-                                                                                         static_cast<float>(print.calib_params().end),
-                                                                                         static_cast<float>(print.calib_params().step)));
+            gcode += writer().set_pressure_advance(interpolate(static_cast<float>(calib_params.start),
+                                                               static_cast<float>(calib_params.end),
+                                                               static_cast<float>(calib_params.step)));
+            m_calib_pa_changed = true;
             break;
         }
         case CalibMode::Calib_Temp_Tower: {
-            gcode += writer().set_temperature(this->interpolate_value_across_layers(static_cast<float>(print.calib_params().start), static_cast<float>(print.calib_params().end), 5.0f));
+            gcode += writer().set_temperature(interpolate(static_cast<float>(calib_params.start), static_cast<float>(calib_params.end), 5.0f));
             break;
         }
         case CalibMode::Calib_VFA_Tower: {
             // Step the outer wall speed from start to end across the tower's layers. Plater::calib_VFA sizes the
             // geometry so each speed step spans one visual block (a fixed number of layers), so the layer-based
             // stepping stays aligned with the blocks regardless of nozzle size / layer height.
-            float _speed = this->interpolate_value_across_layers(static_cast<float>(print.calib_params().start),
-                                                                 static_cast<float>(print.calib_params().end),
-                                                                 static_cast<float>(print.calib_params().step));
+            float _speed = interpolate(static_cast<float>(calib_params.start),
+                                       static_cast<float>(calib_params.end),
+                                       static_cast<float>(calib_params.step));
             m_calib_config.set_key_value("outer_wall_speed", new ConfigOptionFloatsNullable({std::round(_speed)}));
             break;
         }
         case CalibMode::Calib_Vol_speed_Tower: {
-            auto _speed = print.calib_params().start + print_z * print.calib_params().step;
+            auto _speed = calib_params.start + print_z * calib_params.step;
             m_calib_config.set_key_value("outer_wall_speed", new ConfigOptionFloatsNullable({std::round(_speed)}));
             break;
         }
         case CalibMode::Calib_Retraction_tower: {
-            auto _length = print.calib_params().start + std::floor(std::max(0.0,print_z-0.4)) * print.calib_params().step;
+            auto _length = calib_params.start + std::floor(std::max(0.0,print_z-0.4)) * calib_params.step;
             DynamicConfig _cfg;
             _cfg.set_key_value("retraction_length", new ConfigOptionFloats{_length});
             writer().config.apply(_cfg);
+            m_calib_retraction_changed = true;
             sprintf(buf, "; Calib_Retraction_tower: Z_HEIGHT: %g, length:%g\n", print_z, _length);
             gcode += buf;
             break;
         }
         case CalibMode::Calib_Input_shaping_freq: {
             if (m_layer_index == 1){
-                gcode += writer().set_input_shaping('A', print.calib_params().start, 0.f, print.calib_params().shaper_type);
+                gcode += writer().set_input_shaping('A', calib_params.start, 0.f, calib_params.shaper_type);
                 if (m_writer.get_gcode_flavor() == gcfKlipper) {
                     // Disable minimum cruise ratio to ensure consistent motion for calibration
                     gcode += "SET_VELOCITY_LIMIT MINIMUM_CRUISE_RATIO=0\n";
                 }
             } else {
-                if (print.calib_params().freqStartX == print.calib_params().freqStartY && print.calib_params().freqEndX == print.calib_params().freqEndY) {
-                    gcode += writer().set_input_shaping('A', 0.f, this->interpolate_value_across_layers(print.calib_params().freqStartX, print.calib_params().freqEndX), "");
+                if (calib_params.freqStartX == calib_params.freqStartY && calib_params.freqEndX == calib_params.freqEndY) {
+                    gcode += writer().set_input_shaping('A', 0.f, interpolate(calib_params.freqStartX, calib_params.freqEndX), "");
                 } else {
-                    gcode += writer().set_input_shaping('X', 0.f, this->interpolate_value_across_layers(print.calib_params().freqStartX, print.calib_params().freqEndX), "");
-                    gcode += writer().set_input_shaping('Y', 0.f, this->interpolate_value_across_layers(print.calib_params().freqStartY, print.calib_params().freqEndY), "");
+                    gcode += writer().set_input_shaping('X', 0.f, interpolate(calib_params.freqStartX, calib_params.freqEndX), "");
+                    gcode += writer().set_input_shaping('Y', 0.f, interpolate(calib_params.freqStartY, calib_params.freqEndY), "");
                 }
             }
             break;
@@ -5793,10 +5843,10 @@ LayerResult GCode::process_layer(
                     // Disable minimum cruise ratio to ensure consistent motion for calibration
                     gcode += "SET_VELOCITY_LIMIT MINIMUM_CRUISE_RATIO=0\n";
                 }
-                gcode += writer().set_input_shaping('X', 0.f, print.calib_params().freqStartX, print.calib_params().shaper_type);
-                gcode += writer().set_input_shaping('Y', 0.f, print.calib_params().freqStartY, print.calib_params().shaper_type);
+                gcode += writer().set_input_shaping('X', 0.f, calib_params.freqStartX, calib_params.shaper_type);
+                gcode += writer().set_input_shaping('Y', 0.f, calib_params.freqStartY, calib_params.shaper_type);
             } else {
-                gcode += writer().set_input_shaping('A', this->interpolate_value_across_layers(print.calib_params().start, print.calib_params().end), 0.f, "");
+                gcode += writer().set_input_shaping('A', interpolate(calib_params.start, calib_params.end), 0.f, "");
             }
             break;
         }
@@ -5804,12 +5854,13 @@ LayerResult GCode::process_layer(
             if (m_writer.get_gcode_flavor() == gcfMarlinFirmware &&
                 !m_config.machine_max_junction_deviation.values.empty() &&
                 m_config.machine_max_junction_deviation.values.front() > 0) {
-                gcode += writer().set_junction_deviation(this->interpolate_value_across_layers(print.calib_params().start, print.calib_params().end));
+                gcode += writer().set_junction_deviation(interpolate(calib_params.start, calib_params.end));
             } else {
-                gcode += writer().set_jerk_xy(this->interpolate_value_across_layers(print.calib_params().start, print.calib_params().end));
+                gcode += writer().set_jerk_xy(interpolate(calib_params.start, calib_params.end));
             }
             break;
         }
+        default: break;
     }
 
     //BBS
@@ -5860,6 +5911,9 @@ LayerResult GCode::process_layer(
                 extruder.id() != m_writer.filament()->id())
                 // In single extruder multi material mode, set the temperature for the current extruder only.
                 continue;
+            // A temperature tower sets the temperature of every layer itself.
+            if (m_layer_calib_mode == CalibMode::Calib_Temp_Tower && m_writer.filament() && extruder.id() == m_writer.filament()->id())
+                continue;
             size_t fi = get_filament_config_index((int)extruder.id());
             int temperature = print.config().nozzle_temperature.get_at(fi);
             if (temperature > 0 && temperature != print.config().nozzle_temperature_initial_layer.get_at(fi))
@@ -5868,7 +5922,9 @@ LayerResult GCode::process_layer(
 
         // BBS
         int bed_temp = 0;
-        if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
+        if (single_object_instance_idx != size_t(-1))
+            bed_temp = get_object_bed_temperature(*layer.object(), false, int(first_extruder_id));
+        else if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
             bed_temp = get_highest_bed_temperature(false,print);
         else
             bed_temp = get_bed_temperature(first_extruder_id, false, m_config.curr_bed_type);
@@ -8353,7 +8409,8 @@ std::string GCode::_extrude(const ExtrusionPath &path, std::string description, 
     // If adaptive PA is enabled, by default evaluate PA on all extrusion moves
     bool is_pa_calib = m_curr_print->calib_mode() == CalibMode::Calib_PA_Line ||
                        m_curr_print->calib_mode() == CalibMode::Calib_PA_Pattern ||
-                       m_curr_print->calib_mode() == CalibMode::Calib_PA_Tower;
+                       m_curr_print->calib_mode() == CalibMode::Calib_PA_Tower ||
+                       m_layer_calib_mode == CalibMode::Calib_PA_Tower;
     bool evaluate_adaptive_pa = false;
     bool role_change = (m_last_extrusion_role != path.role());
     if (!is_pa_calib && FILAMENT_CONFIG(adaptive_pressure_advance) && FILAMENT_CONFIG(enable_pressure_advance)) {
@@ -8961,10 +9018,15 @@ std::string GCode::extrusion_role_to_string_for_parser(const ExtrusionRole & rol
 // Step = 0 means gradual interpolation finishing at last value.
 float GCode::interpolate_value_across_layers(float start_value, float end_value, float step) const
 {
-    if (m_layer_index <= 1) {
+    return interpolate_value_across_layers(start_value, end_value, step, m_layer_index, m_layer_count);
+}
+
+float GCode::interpolate_value_across_layers(float start_value, float end_value, float step, int layer_idx, unsigned int layer_count)
+{
+    if (layer_idx <= 1) {
         return start_value;
     }
-    const float ratio = m_layer_index / (m_layer_count - 1.f);
+    const float ratio = layer_idx / (layer_count - 1.f);
     if (step > 0.f) {
         // Discrete equal-width bands. band is clamped to the last band so the result can't overshoot the range:
         // at the top layer ratio * n_bands == n_bands, which would otherwise index one band past the end.

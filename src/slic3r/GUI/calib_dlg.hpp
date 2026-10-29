@@ -18,6 +18,31 @@
 
 namespace Slic3r { namespace GUI {
 
+// ORCA: "Add as an extra test" option of the calibration dialogs. The test joins the ones already on the plate,
+// printed by object with the filament picked here, instead of starting a new project.
+class CalibExtraTestOption
+{
+public:
+    void create(wxWindow* parent, wxSizer* sizer);
+    // Refills the filament list and enables the option when the plate has objects. Done when the dialog is shown.
+    void update();
+    // Whether the selected kind of test can share the plate (the PA line and pattern cannot).
+    void allow(bool allowed);
+    // The 1-based filament of the extra test, 0 to start a new project.
+    int  filament_id() const;
+
+private:
+    void update_enabled();
+
+    CheckBox*        m_checkbox{nullptr};
+    wxStaticText*    m_label{nullptr};
+    wxStaticText*    m_filament_label{nullptr};
+    ComboBox*        m_filament{nullptr};
+    std::vector<int> m_filament_ids;
+    bool             m_allowed{true};
+    bool             m_has_objects{false};
+};
+
 class PA_Calibration_Dlg : public DPIDialog
 {
 public:
@@ -44,6 +69,7 @@ protected:
 	CheckBox* m_cbPrintNum;
 	TextInput* m_tiBMAccels;
 	TextInput* m_tiBMSpeeds;
+	CalibExtraTestOption m_extra;
 
 	Plater* m_plater;
 };
@@ -66,6 +92,7 @@ protected:
     TextInput* m_tiEnd;
     TextInput* m_tiStep;
     CheckBox*  m_cbResize;
+    CalibExtraTestOption m_extra;
     Plater* m_plater;
 };
 
@@ -121,6 +148,7 @@ protected:
     TextInput* m_tiStart;
     TextInput* m_tiEnd;
     TextInput* m_tiStep;
+    CalibExtraTestOption m_extra;
     Plater* m_plater;
 };
 
@@ -197,6 +225,7 @@ protected:
     RadioGroup* m_rbType;
     // ORCA: use standard OrcaSlicer ComboBox instead of BitmapComboBox
     ComboBox* m_rbPattern;
+    CalibExtraTestOption m_extra;
     Plater* m_plater;
 };
 }} // namespace Slic3r::GUI

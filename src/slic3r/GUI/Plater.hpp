@@ -148,6 +148,7 @@ class Sidebar : public wxPanel
     SyncAmsInfoDialog*                      m_sync_dlg{nullptr};
 
     void update_sync_ams_btn_enable(wxUpdateUIEvent &e);
+    void update_last_filament_btn();
 
 public:
     enum DockingState
@@ -215,6 +216,10 @@ public:
     static bool should_show_SEMM_buttons();
     void show_SEMM_buttons();
     void enable_purge_mode_btn(bool enable);
+    // Filament (1 based) the user assigned last. New objects get it instead of filament 1
+    // while the titlebar toggle is on.
+    void remember_last_used_filament(int filament_id);
+    int  filament_for_new_objects() const;
     // Sidebar nozzle-count badge on the extruder cards (multi-nozzle printers only).
     void set_extruder_nozzle_count(int extruder_id, int nozzle_count);
     void enable_nozzle_count_edit(bool enable);
@@ -356,6 +361,8 @@ public:
     void add_file();
     // Returns false when no object was added (e.g. the user cancelled the load dialog).
     bool add_model(bool imperial_units = false, std::string fname = "");
+    // ORCA: asks for a filament, then imports models printed with it, by object, apart from the plate's other objects.
+    void add_models_with_filament();
     void import_zip_archive();
     void import_sl1_archive();
     void extract_config_from_project();
@@ -365,9 +372,12 @@ public:
     void reload_print();
 
     // SoftFever
+    // Makes the filament the calibration test prints with the edited one. Returns false if the
+    // user chose to keep editing the current filament preset.
+    bool edit_filament_preset_for_calibration();
     void calib_pa(const Calib_Params& params);
     //ORCA: Add pattern parameter to calib_flowrate
-    void calib_flowrate(bool is_linear, int pass, InfillPattern pattern = ipArchimedeanChords);
+    void calib_flowrate(bool is_linear, int pass, InfillPattern pattern = ipArchimedeanChords, int extra_filament_id = 0);
     void calib_temp(const Calib_Params& params);
     void calib_max_vol_speed(const Calib_Params& params);
     void calib_retraction(const Calib_Params& params);
@@ -1046,8 +1056,14 @@ private:
 
     void _calib_pa_pattern(const Calib_Params& params);
     void _calib_pa_pattern_gen_gcode();
-    void _calib_pa_tower(const Calib_Params& params);
-    void _calib_pa_select_added_objects();
+    void _calib_pa_tower(const Calib_Params& params, size_t obj_idx);
+    void _calib_pa_select_added_objects(size_t obj_idx = 0);
+    // ORCA: a calibration test either starts a new project or, with Calib_Params::extra_filament_id, joins the
+    // tests already on the plate. obj_idx receives the index of the test's first object.
+    bool begin_calibration(const wxString& project_name, const Calib_Params& params, size_t& obj_idx);
+    void finish_calibration(size_t obj_idx, const Calib_Params& params);
+    void place_new_objects_apart(size_t obj_idx, int filament_id);
+    void print_plate_by_object();
 
     void cut_horizontal(size_t obj_idx, size_t instance_idx, double z, ModelObjectCutAttributes attributes);
 

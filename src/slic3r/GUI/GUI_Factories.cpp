@@ -1419,6 +1419,9 @@ void MenuFactory::create_default_menu()
     append_menu_item(&m_default_menu, wxID_ANY, _L("Add Models"), "", // ORCA: Add Models
         [](wxCommandEvent&) { plater()->add_file(); }, "menu_add_part", &m_default_menu,
         []() {return wxGetApp().plater()->can_add_model(); }, m_parent);
+    append_menu_item(&m_default_menu, wxID_ANY, _L("Add Models with Another Filament"), "",
+        [](wxCommandEvent&) { plater()->add_models_with_filament(); }, "menu_add_part", &m_default_menu,
+        []() {return wxGetApp().plater()->can_add_model(); }, m_parent);
 
     m_default_menu.AppendSeparator();
 
@@ -1805,6 +1808,9 @@ void MenuFactory::create_plate_menu()
         []() {return true; }, m_parent);
     append_menu_item(menu, wxID_ANY, _L("Add Models"), "", // ORCA: Add Models
         [](wxCommandEvent&) { plater()->add_file(); }, "menu_add_part", menu,
+        []() {return wxGetApp().plater()->can_add_model(); }, m_parent);
+    append_menu_item(menu, wxID_ANY, _L("Add Models with Another Filament"), "",
+        [](wxCommandEvent&) { plater()->add_models_with_filament(); }, "menu_add_part", menu,
         []() {return wxGetApp().plater()->can_add_model(); }, m_parent);
 
     append_menu_item_replace_all_with_stl(menu);

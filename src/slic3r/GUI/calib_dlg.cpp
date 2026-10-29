@@ -1,6 +1,8 @@
 #include "calib_dlg.hpp"
 #include "GUI_App.hpp"
+#include "Plater.hpp"
 #include "MsgDialog.hpp"
+#include "libslic3r/PresetBundle.hpp"
 #include "I18N.hpp"
 #include <wx/dcgraph.h>
 #include "MainFrame.hpp"
@@ -97,6 +99,83 @@ std::vector<wxString> make_shaper_type_labels()
     return labels;
 }
 
+}
+
+void CalibExtraTestOption::create(wxWindow* parent, wxSizer* sizer)
+{
+    auto row   = new wxBoxSizer(wxHORIZONTAL);
+    m_checkbox = new CheckBox(parent);
+    m_label    = new wxStaticText(parent, wxID_ANY, _L("Add as an extra test"), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+    const wxString tooltip = _L("Keep the tests already on the plate and add this one, with its own values, printed with the filament "
+                                "chosen below. The plate is printed by object: one test after the other, changing the filament between them.");
+    m_checkbox->SetToolTip(tooltip);
+    m_label->SetToolTip(tooltip);
+    row->Add(m_checkbox, 0, wxALL | wxALIGN_CENTER_VERTICAL, parent->FromDIP(2));
+    row->Add(m_label   , 0, wxALL | wxALIGN_CENTER_VERTICAL, parent->FromDIP(2));
+    sizer->Add(row, 0, wxLEFT | wxTOP, parent->FromDIP(3));
+
+    auto filament_row = new wxBoxSizer(wxHORIZONTAL);
+    m_filament_label  = new wxStaticText(parent, wxID_ANY, _L("Filament") + ": ", wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+    m_filament        = new ComboBox(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, parent->FromDIP(wxSize(260, -1)), 0, nullptr, wxCB_READONLY);
+    filament_row->Add(m_filament_label, 0, wxALL | wxALIGN_CENTER_VERTICAL, parent->FromDIP(2));
+    filament_row->Add(m_filament      , 0, wxALL | wxALIGN_CENTER_VERTICAL, parent->FromDIP(2));
+    sizer->Add(filament_row, 0, wxLEFT, parent->FromDIP(3));
+
+    m_checkbox->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent& e) {
+        update_enabled();
+        e.Skip();
+    });
+    parent->Bind(wxEVT_SHOW, [this](wxShowEvent& e) {
+        if (e.IsShown())
+            update();
+        e.Skip();
+    });
+}
+
+void CalibExtraTestOption::update()
+{
+    const PresetBundle& bundle = *wxGetApp().preset_bundle;
+    m_filament->Clear();
+    m_filament_ids.clear();
+    for (size_t i = 0; i < bundle.filament_presets.size(); ++i)
+        if (!bundle.is_mixed_filament(i)) {
+            m_filament->Append(wxString::Format("%d: %s", int(i + 1), from_u8(bundle.filament_presets[i])));
+            m_filament_ids.push_back(int(i + 1));
+        }
+    if (!m_filament_ids.empty()) {
+        const auto it  = std::find(m_filament_ids.begin(), m_filament_ids.end(), wxGetApp().sidebar().filament_for_new_objects());
+        const int  sel = it == m_filament_ids.end() ? 0 : int(it - m_filament_ids.begin());
+        m_filament->SetSelection(sel);
+        m_filament->SetValue(m_filament->GetString(sel));
+    }
+    m_has_objects = !wxGetApp().plater()->model().objects.empty();
+    update_enabled();
+}
+
+void CalibExtraTestOption::allow(bool allowed)
+{
+    m_allowed = allowed;
+    update_enabled();
+}
+
+int CalibExtraTestOption::filament_id() const
+{
+    if (!m_checkbox->IsEnabled() || !m_checkbox->GetValue())
+        return 0;
+    const int sel = m_filament->GetSelection();
+    return sel >= 0 && sel < int(m_filament_ids.size()) ? m_filament_ids[sel] : 0;
+}
+
+void CalibExtraTestOption::update_enabled()
+{
+    const bool can_add = m_allowed && m_has_objects;
+    if (!can_add)
+        m_checkbox->SetValue(false);
+    m_checkbox->Enable(can_add);
+    m_label->Enable(can_add);
+    const bool add = can_add && m_checkbox->GetValue();
+    m_filament_label->Enable(add);
+    m_filament->Enable(add);
 }
 
 PA_Calibration_Dlg::PA_Calibration_Dlg(wxWindow* parent, wxWindowID id, Plater* plater)
@@ -204,6 +283,9 @@ PA_Calibration_Dlg::PA_Calibration_Dlg(wxWindow* parent, wxWindowID id, Plater* 
     sp_speed_sizer->Add(m_tiBMSpeeds , 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(2));
     settings_sizer->Add(sp_speed_sizer, 0, wxLEFT, FromDIP(3));
 
+    m_extra.create(this, settings_sizer);
+    settings_sizer->AddSpacer(FromDIP(5));
+
     v_sizer->Add(settings_sizer, 0, wxTOP | wxRIGHT | wxLEFT | wxEXPAND, FromDIP(10));
     v_sizer->AddSpacer(FromDIP(5));
 
@@ -283,6 +365,8 @@ void PA_Calibration_Dlg::reset_params() {
             m_tiPAStep->GetTextCtrl()->SetValue(wxString::FromDouble(0.02));
         }
     }
+    // The line and the pattern are drawn over the bed, only the tower shares the plate with other tests.
+    m_extra.allow(m_params.mode == CalibMode::Calib_PA_Tower);
 }
 
 void PA_Calibration_Dlg::on_start(wxCommandEvent& event) {
@@ -308,6 +392,7 @@ void PA_Calibration_Dlg::on_start(wxCommandEvent& event) {
     }
 
     m_params.print_numbers = m_cbPrintNum->GetValue();
+    m_params.extra_filament_id = m_extra.filament_id();
     ParseStringValues(m_tiBMAccels->GetTextCtrl()->GetValue().ToStdString(), m_params.accelerations);
     ParseStringValues(m_tiBMSpeeds->GetTextCtrl()->GetValue().ToStdString(), m_params.speeds);
 
@@ -324,8 +409,10 @@ void PA_Calibration_Dlg::on_start(wxCommandEvent& event) {
         }
     }
 
-    m_plater->calib_pa(m_params);
+    // Close before the test is set up: a dialog hidden while the main window is minimized is shown
+    // again by Windows once the main window is restored, without the dialog knowing it.
     EndModal(wxID_OK);
+    m_plater->calib_pa(m_params);
 
 }
 void PA_Calibration_Dlg::on_extruder_type_changed(wxCommandEvent& event) {
@@ -344,6 +431,8 @@ void PA_Calibration_Dlg::on_dpi_changed(const wxRect& suggested_rect) {
 
 void PA_Calibration_Dlg::on_show(wxShowEvent& event) {
     PA_Calibration_Dlg::reset_params();
+    if (event.IsShown())
+        m_extra.update();
 }
 
 // Temp calib dlg
@@ -424,6 +513,8 @@ Temp_Calibration_Dlg::Temp_Calibration_Dlg(wxWindow* parent, wxWindowID id, Plat
     // Resize the model to the nozzle diameter (recommended)
     m_cbResize = add_scale_checkbox(this, settings_sizer);
 
+    m_extra.create(this, settings_sizer);
+
     settings_sizer->AddSpacer(FromDIP(5));
 
     v_sizer->Add(settings_sizer, 0, wxTOP | wxRIGHT | wxLEFT | wxEXPAND, FromDIP(10));
@@ -499,8 +590,9 @@ void Temp_Calibration_Dlg::on_start(wxCommandEvent& event) {
     m_params.end = end;
     m_params.nozzle_based_resize = m_cbResize->GetValue();
     m_params.mode = CalibMode::Calib_Temp_Tower;
+    m_params.extra_filament_id = m_extra.filament_id();
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_temp(m_params);
-    EndModal(wxID_OK);
 
 }
 
@@ -646,8 +738,8 @@ void MaxVolumetricSpeed_Test_Dlg::on_start(wxCommandEvent& event) {
     }
 
     m_params.mode = CalibMode::Calib_Vol_speed_Tower;
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_max_vol_speed(m_params);
-    EndModal(wxID_OK);
 
 }
 
@@ -776,6 +868,9 @@ void VFA_Test_Dlg::on_start(wxCommandEvent& event)
     // the requested one. Depending on the "Auto-adjust" option, either fix it automatically or just warn.
     m_params.vfa_layer_height    = 0.0; // 0 = auto (nozzle/2); overridden below when auto-adjusting
     m_params.nozzle_based_resize = m_cbResize->GetValue();
+    // The limits below come from the edited filament preset, which has to be the one the tower prints with.
+    if (!m_plater->edit_filament_preset_for_calibration())
+        return;
     if (const auto* preset_bundle = wxGetApp().preset_bundle) {
         const auto& printer_config  = preset_bundle->printers.get_edited_preset().config;
         const auto& print_config    = preset_bundle->prints.get_edited_preset().config;
@@ -902,8 +997,8 @@ void VFA_Test_Dlg::on_start(wxCommandEvent& event)
     }
 
     m_params.mode = CalibMode::Calib_VFA_Tower;
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_VFA(m_params);
-    EndModal(wxID_OK);
 }
 
 void VFA_Test_Dlg::on_dpi_changed(const wxRect& suggested_rect)
@@ -969,6 +1064,8 @@ Retraction_Test_Dlg::Retraction_Test_Dlg(wxWindow* parent, wxWindowID id, Plater
     length_step_sizer->Add(m_tiStep        , 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(2));
     settings_sizer->Add(length_step_sizer, 0, wxLEFT, FromDIP(3));
 
+    m_extra.create(this, settings_sizer);
+
     settings_sizer->AddSpacer(FromDIP(5));
 
     v_sizer->Add(settings_sizer, 0, wxTOP | wxRIGHT | wxLEFT | wxEXPAND, FromDIP(10));
@@ -1009,8 +1106,9 @@ void Retraction_Test_Dlg::on_start(wxCommandEvent& event) {
     }
 
     m_params.mode = CalibMode::Calib_Retraction_tower;
+    m_params.extra_filament_id = m_extra.filament_id();
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_retraction(m_params);
-    EndModal(wxID_OK);
 
 }
 
@@ -1684,6 +1782,9 @@ FlowRateCalibrationDialog::FlowRateCalibrationDialog(wxWindow* parent, wxWindowI
     pattern_sizer->Add(m_rbPattern , 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(2));
     settings_sizer->Add(pattern_sizer, 0, wxLEFT, FromDIP(3));
 
+    m_extra.create(this, settings_sizer);
+    settings_sizer->AddSpacer(FromDIP(5));
+
     v_sizer->Add(settings_sizer, 0, wxTOP | wxRIGHT | wxLEFT | wxEXPAND, FromDIP(10));
 
     v_sizer->AddSpacer(FromDIP(5));
@@ -1720,8 +1821,9 @@ void FlowRateCalibrationDialog::on_start(wxCommandEvent& event) {
     bool is_linear = (type >= 2);
     int pass = (type % 2) + 1;
 
-    m_plater->calib_flowrate(is_linear, pass, pattern);
-    EndModal(wxID_OK);
+    const int extra_filament_id = m_extra.filament_id();
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
+    m_plater->calib_flowrate(is_linear, pass, pattern, extra_filament_id);
 }
 
 void FlowRateCalibrationDialog::on_dpi_changed(const wxRect& suggested_rect) {
