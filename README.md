@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `melhoria/adicionar-com-outro-filamento`**
+>
+> **O que muda:** Novo comando no clique direito da mesa e em Arquivo > Importar. Você escolhe o filamento e os modelos são importados com ele. A mesa passa a ser impressa por objeto, e os objetos novos ficam afastados dos outros.
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`). Traz o commit "Plater: afastar objetos novos e imprimir a mesa por objeto", o mesmo da branch `melhoria/testes-extras-na-mesa`, mas não precisa dela.
+>
+> - **Testado:** nada ainda. O comando foi compilado, mas não foi testado.
+> - **Não testado:** tudo.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* "Add Models with Another Filament" imports models with a chosen filament, prints the plate by object and moves the new objects away from the others. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
