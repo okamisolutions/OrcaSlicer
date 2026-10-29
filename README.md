@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `melhoria/testes-extras-na-mesa`**
+>
+> **O que muda:** Os diálogos de temperatura, retração, torre de PA e fluxo ganham a opção "Adicionar como teste extra" e a escolha do filamento. O teste entra na mesa ao lado dos que já estão lá, cada objeto com os seus próprios valores, e a mesa passa a ser impressa por objeto, trocando o filamento entre os testes.
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`). Traz o commit "Plater: afastar objetos novos e imprimir a mesa por objeto", o mesmo da branch `melhoria/adicionar-com-outro-filamento`, então as duas se juntam sem conflito. Não depende de outra branch, mas funciona melhor com `melhoria/mesa-por-objeto` quando os filamentos pedem temperaturas de mesa diferentes.
+>
+> - **Testado:** usado em impressões reais em 16, 17 e 20/10/2026, com o beta 1 e o beta 2, numa Kobra 3 V2 com ACE Pro: torres de temperatura, retração e PA de PLA e PETG na mesma mesa.
+> - **Não testado:** falta um teste organizado da interface. Houve falhas ainda sem causa confirmada: em 16/10, parte de uma base saiu com o outro filamento; em 20/10, uma torre de PA extra caiu. A velocidade de parede da torre de PA extra veio do beta 2. Esta branch sozinha só foi compilada.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* Temperature, retraction, PA tower and flow ratio calibrations can join the tests already on the plate, each with its own values and filament; the plate is then printed by object. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
