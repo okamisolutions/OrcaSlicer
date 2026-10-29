@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `correcao/pa-calibracao`**
+>
+> **O que muda:** Os testes de pressure advance em linha e em padrão passam a usar o filamento e o bico com que são impressos, e não sempre os primeiros. Também corrige o índice do filamento, deslocado em 1, no teste em padrão. Um segundo commit põe um espaço antes do comentário nos comandos de PA (`SET_PRESSURE_ADVANCE ADVANCE=0.04 ; ...`).
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`). Não depende de outra branch.
+>
+> - **Testado:** testes de PA em linha impressos com o beta 1 numa Kobra 3 V2.
+> - **Não testado:** o teste em padrão com um filamento que não seja o 1. A necessidade do espaço antes do comentário não foi comprovada (a mudança é inofensiva). Esta branch sozinha só foi compilada.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* PA line and pattern calibrations use the nozzle, filament diameter and flow ratio of the filament they print with, and the pattern test no longer picks the filament off by one. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
