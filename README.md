@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `melhoria/mesa-por-objeto`**
+>
+> **O que muda:** Na impressão por objeto com filamentos diferentes, a temperatura da mesa passa a seguir o objeto que está sendo impresso, em vez de ficar na maior temperatura da mesa inteira. Antes, um objeto de PLA era impresso a 70 °C por causa do PETG ao lado. Com a fórmula "maior temperatura", cada objeto usa a maior temperatura entre os seus filamentos.
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`). Não depende de outra branch.
+>
+> - **Testado:** conferido no G-code e usado em 20/10/2026 com o beta 2, numa Kobra 3 V2: PETG com a mesa a 70 °C e, depois, PLA a 65 e 60 °C na mesma mesa.
+> - **Não testado:** a impressão daquele dia foi cancelada na troca de filamento, então o resultado da mudança de temperatura da mesa não foi confirmado. Esta branch sozinha só foi compilada.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* Printing by object, the bed temperature follows the filaments of the object being printed instead of the hottest filament on the plate. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
