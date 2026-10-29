@@ -781,6 +781,7 @@ private:
     // BBS
     int get_bed_temperature(const int extruder_id, const bool is_first_layer, const BedType bed_type) const;
     int get_highest_bed_temperature(const bool is_first_layer,const Print &print) const;
+    int get_object_bed_temperature(const PrintObject &object, const bool is_first_layer, const int first_extruder_id) const;
 
     void update_layer_related_config(int layer_id);
 
@@ -788,7 +789,8 @@ private:
     std::string _extrude(const ExtrusionPath &path, std::string description = "", double speed = -1);
     bool _needSAFC(const ExtrusionPath &path);
     void print_machine_envelope(GCodeOutputStream& file, Print& print);
-    void _print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait);
+    void _print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait,
+                                            const PrintObject *object = nullptr);
     void _print_first_layer_extruder_temperatures(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait);
     // On the first printing layer. This flag triggers first layer speeds.
     //BBS

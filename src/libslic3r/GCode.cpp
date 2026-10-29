@@ -3620,7 +3620,9 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
         const ConfigOptionInts* first_bed_temp_opt = m_config.option<ConfigOptionInts>(get_bed_temp_1st_layer_key((BedType)curr_bed_type));
         const ConfigOptionInts* bed_temp_opt = m_config.option<ConfigOptionInts>(get_bed_temp_key((BedType)curr_bed_type));
         int target_bed_temp = 0;
-        if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
+        if (print.config().print_sequence == PrintSequence::ByObject && !print_object_instances_ordering.empty())
+            target_bed_temp = get_object_bed_temperature(*(*first_has_extrude_print_object)->print_object, true, int(initial_extruder_id));
+        else if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
             target_bed_temp = get_highest_bed_temperature(true, print);
         else
             target_bed_temp = get_bed_temperature(initial_extruder_id, true, curr_bed_type);
@@ -3966,7 +3968,9 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
                     this->placeholder_parser().set("current_object_idx", int(finished_objects));
                     std::string printing_by_object_gcode = this->placeholder_parser_process("printing_by_object_gcode", print.config().printing_by_object_gcode.value, initial_extruder_id);
                     // Set first layer bed and extruder temperatures, don't wait for it to reach the temperature.
-                    this->_print_first_layer_bed_temperature(file, print, printing_by_object_gcode, initial_extruder_id, false);
+                    // ORCA: the bed follows this object's filaments; wait when it has to heat up, so that the first layer sticks.
+                    const bool heat_bed_up = get_object_bed_temperature(object, true, int(initial_extruder_id)) > m_writer.last_bed_temperature();
+                    this->_print_first_layer_bed_temperature(file, print, printing_by_object_gcode, initial_extruder_id, heat_bed_up, &object);
                     this->_print_first_layer_extruder_temperatures(file, print, printing_by_object_gcode, initial_extruder_id, false);
                     file.writeln(printing_by_object_gcode);
                 }
@@ -4741,17 +4745,33 @@ int GCode::get_highest_bed_temperature(const bool is_first_layer, const Print& p
     return bed_temp;
 }
 
+// ORCA: printed by object, the bed follows the filaments of the object being printed, so that a PLA object is not
+// printed on a bed heated for the PETG object sharing the plate.
+int GCode::get_object_bed_temperature(const PrintObject &object, const bool is_first_layer, const int first_extruder_id) const
+{
+    if (m_config.bed_temperature_formula != BedTempFormula::btfHighestTemp)
+        return get_bed_temperature(first_extruder_id, is_first_layer, m_config.curr_bed_type);
+    int bed_temp = 0;
+    for (unsigned int extruder_id : object.object_extruders())
+        bed_temp = std::max(bed_temp, get_bed_temperature(int(extruder_id), is_first_layer, m_config.curr_bed_type));
+    return bed_temp > 0 ? bed_temp : get_bed_temperature(first_extruder_id, is_first_layer, m_config.curr_bed_type);
+}
+
 // Write 1st layer bed temperatures into the G-code.
 // Only do that if the start G-code does not already contain any M-code controlling an extruder temperature.
 // M140 - Set Extruder Temperature
 // M190 - Set Extruder Temperature and Wait
-void GCode::_print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait)
+void GCode::_print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait,
+                                               const PrintObject *object)
 {
     // Initial bed temperature based on the first extruder.
     // BBS
     std::vector<int> temps_per_bed;
     int bed_temp = 0;
-    if (m_config.bed_temperature_formula.value == BedTempFormula::btfHighestTemp) {
+    if (object != nullptr) {
+        bed_temp = get_object_bed_temperature(*object, true, int(first_printing_extruder_id));
+    }
+    else if (m_config.bed_temperature_formula.value == BedTempFormula::btfHighestTemp) {
         bed_temp = get_highest_bed_temperature(true, print);
     }
     else {
@@ -5868,7 +5888,9 @@ LayerResult GCode::process_layer(
 
         // BBS
         int bed_temp = 0;
-        if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
+        if (single_object_instance_idx != size_t(-1))
+            bed_temp = get_object_bed_temperature(*layer.object(), false, int(first_extruder_id));
+        else if (m_config.bed_temperature_formula == BedTempFormula::btfHighestTemp)
             bed_temp = get_highest_bed_temperature(false,print);
         else
             bed_temp = get_bed_temperature(first_extruder_id, false, m_config.curr_bed_type);
