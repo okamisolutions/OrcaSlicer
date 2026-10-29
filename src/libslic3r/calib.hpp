@@ -48,6 +48,9 @@ struct Calib_Params
     // Scale the calibration model to the nozzle diameter and set the layer height accordingly (temp tower / VFA).
     // When false the 0.4 mm / 0.2 mm reference model is printed as-is.
     bool nozzle_based_resize = true;
+    // ORCA: > 0 adds the test next to the objects already on the plate, printed with this filament (1-based),
+    // instead of starting a new project. Each test object keeps its own parameters, see Print::calib_params_for().
+    int extra_filament_id = 0;
 
     CalibMode mode;
 };

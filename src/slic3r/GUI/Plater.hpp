@@ -367,7 +367,7 @@ public:
     // SoftFever
     void calib_pa(const Calib_Params& params);
     //ORCA: Add pattern parameter to calib_flowrate
-    void calib_flowrate(bool is_linear, int pass, InfillPattern pattern = ipArchimedeanChords);
+    void calib_flowrate(bool is_linear, int pass, InfillPattern pattern = ipArchimedeanChords, int extra_filament_id = 0);
     void calib_temp(const Calib_Params& params);
     void calib_max_vol_speed(const Calib_Params& params);
     void calib_retraction(const Calib_Params& params);
@@ -1046,8 +1046,12 @@ private:
 
     void _calib_pa_pattern(const Calib_Params& params);
     void _calib_pa_pattern_gen_gcode();
-    void _calib_pa_tower(const Calib_Params& params);
-    void _calib_pa_select_added_objects();
+    void _calib_pa_tower(const Calib_Params& params, size_t obj_idx);
+    void _calib_pa_select_added_objects(size_t obj_idx = 0);
+    // ORCA: a calibration test either starts a new project or, with Calib_Params::extra_filament_id, joins the
+    // tests already on the plate. obj_idx receives the index of the test's first object.
+    bool begin_calibration(const wxString& project_name, const Calib_Params& params, size_t& obj_idx);
+    void finish_calibration(size_t obj_idx, const Calib_Params& params);
     // ORCA: objects added next to the others of the plate, printed by object with their own filament.
     void place_new_objects_apart(size_t obj_idx, int filament_id);
     void print_plate_by_object();

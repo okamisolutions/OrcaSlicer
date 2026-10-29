@@ -19051,6 +19051,30 @@ msgstr ""
 "Por favor, selecione um que deve ser usado."
 
 # AI Translated
+msgid "Add as an extra test"
+msgstr "Adicionar como teste extra"
+
+# AI Translated
+msgid ""
+"Keep the tests already on the plate and add this one, with its own values, printed with the filament "
+"chosen below. The plate is printed by object: one test after the other, changing the filament between them."
+msgstr ""
+"Mantém os testes que já estão na mesa e adiciona este, com seus próprios valores, impresso com o filamento "
+"escolhido abaixo. A mesa é impressa por objeto: um teste depois do outro, trocando o filamento entre eles."
+
+# AI Translated
+msgid "This test cannot share the plate with other tests. Start it without \"Add as an extra test\"."
+msgstr "Este teste não pode dividir a mesa com outros testes. Inicie-o sem \"Adicionar como teste extra\"."
+
+# AI Translated
+msgid "Flow ratio tests can only share the plate with other flow ratio tests."
+msgstr "Testes de fluxo só podem dividir a mesa com outros testes de fluxo."
+
+# AI Translated
+msgid "Several calibration tests on one plate need the \"By object\" print sequence."
+msgstr "Vários testes de calibração na mesma mesa precisam da sequência de impressão \"Por objeto\"."
+
+# AI Translated
 msgid "Print sequence set to \"By object\", so that the objects are printed one after the other."
 msgstr "Sequência de impressão mudada para \"Por objeto\", para imprimir os objetos um depois do outro."
 

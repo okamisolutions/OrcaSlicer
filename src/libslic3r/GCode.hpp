@@ -264,6 +264,8 @@ public:
     // Step will create equal layers steps from first to last value.
     // Step = 0 means gradual interpolation finishing at last value.
     float interpolate_value_across_layers(float start_value, float end_value, float step = 0.0f) const;
+    // Same, for the layer layer_idx of layer_count layers.
+    static float interpolate_value_across_layers(float start_value, float end_value, float step, int layer_idx, unsigned int layer_count);
 
     // For Perl bindings, to be used exclusively by unit tests.
     unsigned int    layer_count() const { return m_layer_count; }
@@ -600,6 +602,11 @@ private:
     Vec2d                               m_origin;
     FullPrintConfig                     m_config;
     DynamicConfig                       m_calib_config;
+    // ORCA: calibration mode of the object printed at the current layer (Print::calib_params_for()).
+    CalibMode                           m_layer_calib_mode{ CalibMode::Calib_None };
+    // A calibration object changed the pressure advance / retraction length, restore them for the next object.
+    bool                                m_calib_pa_changed{ false };
+    bool                                m_calib_retraction_changed{ false };
     // scaled G-code resolution
     double                              m_scaled_resolution;
     GCodeWriter                         m_writer;

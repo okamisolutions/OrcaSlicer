@@ -1173,8 +1173,16 @@ public:
     WipeTowerType wipe_tower_type() const { return is_BBL_printer() ? WipeTowerType::Type1 : m_config.wipe_tower_type.value; }
     CalibMode& calib_mode() { return m_calib_params.mode; }
     const CalibMode calib_mode() const { return m_calib_params.mode; }
+    // Sets the calibration of the whole print and forgets the per-object calibrations.
     void set_calib_params(const Calib_Params& params);
     const Calib_Params& calib_params() const { return m_calib_params; }
+    // ORCA: calibration of one test object, so that several tests (e.g. one per filament) share a plate printed
+    // by object. Once any object of this print has its own calibration, objects without one are not calibrated.
+    void set_object_calib_params(ObjectID model_object_id, const Calib_Params& params);
+    const Calib_Params* object_calib_params(ObjectID model_object_id) const;
+    bool has_object_calib_params() const;
+    const Calib_Params& calib_params_for(const PrintObject* object) const;
+    bool has_calib_mode(CalibMode mode) const;
     Vec2d translate_to_print_space(const Vec2d &point) const;
     // Orca: precise counterpart of compacted_wipe_tower_clearance_valid(), run once the tower exists.
     void                validate_compacted_wipe_tower_clearance() const;
@@ -1383,6 +1391,7 @@ private:
 
     //SoftFever: calibration
     Calib_Params m_calib_params;
+    std::map<ObjectID, Calib_Params> m_object_calib_params;
 
     bool m_need_check_multi_filaments_compatibility{true};
 

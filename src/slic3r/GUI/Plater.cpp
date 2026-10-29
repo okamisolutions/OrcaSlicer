@@ -15997,6 +15997,58 @@ bool Plater::add_model(bool imperial_units, std::string fname)
     return loaded;
 }
 
+// ORCA: tests that need the plate to themselves: G-code drawn over the bed, spiral vase mode or machine settings.
+static bool calibration_needs_own_plate(CalibMode mode)
+{
+    switch (mode) {
+    case CalibMode::Calib_PA_Line:
+    case CalibMode::Calib_PA_Pattern:
+    case CalibMode::Calib_Auto_PA_Line:
+    case CalibMode::Calib_Vol_speed_Tower:
+    case CalibMode::Calib_VFA_Tower:
+    case CalibMode::Calib_Input_shaping_freq:
+    case CalibMode::Calib_Input_shaping_damp:
+    case CalibMode::Calib_Cornering: return true;
+    default: return false;
+    }
+}
+
+bool Plater::begin_calibration(const wxString& project_name, const Calib_Params& params, size_t& obj_idx)
+{
+    obj_idx = 0;
+    if (params.extra_filament_id <= 0 || model().objects.empty())
+        return new_project(false, false, project_name) != wxID_CANCEL;
+
+    Print *print = p->background_process.fff_print();
+    const Calib_Params current = print->calib_params();
+    if (calibration_needs_own_plate(current.mode) || calibration_needs_own_plate(params.mode)) {
+        MessageDialog(this, _L("This test cannot share the plate with other tests. Start it without \"Add as an extra test\"."),
+                      _L("Calibration"), wxICON_WARNING | wxOK).ShowModal();
+        return false;
+    }
+    // Printed by object, objects keep the extruder clearance radius from each other unless they are all lower than the
+    // nozzle, so the flat flow ratio tests cannot share the plate with towers.
+    PartPlate   *plate         = p->partplate_list.get_curr_plate();
+    const double nozzle_height = wxGetApp().preset_bundle->full_config().opt_float("nozzle_height");
+    const bool   flat_test     = params.mode == CalibMode::Calib_Flow_Rate;
+    for (size_t i = 0; i < model().objects.size(); ++i)
+        if (plate->contain_instance(int(i), 0) && (model().objects[i]->bounding_box_exact().size().z() < nozzle_height) != flat_test) {
+            MessageDialog(this, _L("Flow ratio tests can only share the plate with other flow ratio tests."),
+                          _L("Calibration"), wxICON_WARNING | wxOK).ShowModal();
+            return false;
+        }
+
+    // Objects calibrated by the whole print keep that calibration as their own.
+    if (current.mode != CalibMode::Calib_None)
+        for (const ModelObject *object : model().objects)
+            if (!print->object_calib_params(object->id()))
+                print->set_object_calib_params(object->id(), current);
+
+    print_plate_by_object();
+    obj_idx = model().objects.size();
+    return true;
+}
+
 // Objects sharing the plate with their own filament or calibration are printed one after the other.
 void Plater::print_plate_by_object()
 {
@@ -16075,10 +16127,31 @@ void Plater::place_new_objects_apart(size_t obj_idx, int filament_id)
     changed_objects(test_objects);
 }
 
-void Plater::calib_pa(const Calib_Params& params)
+// Gives the test's parameters to the print: to the whole print for a new project, to the test's objects for an extra test.
+void Plater::finish_calibration(size_t obj_idx, const Calib_Params& params)
+{
+    Print *print = p->background_process.fff_print();
+    if (obj_idx == 0) {
+        if (params.mode != CalibMode::Calib_Flow_Rate)
+            print->set_calib_params(params);
+        return;
+    }
+    place_new_objects_apart(obj_idx, params.extra_filament_id);
+    if (params.mode != CalibMode::Calib_Flow_Rate)
+        for (size_t i = obj_idx; i < model().objects.size(); ++i)
+            print->set_object_calib_params(model().objects[i]->id(), params);
+}
+
+void Plater::calib_pa(const Calib_Params& params_in)
 {
     const auto calib_pa_name = wxString::Format(L"Pressure Advance Test");
-    new_project(false, false, calib_pa_name);
+    // Only the tower can join other tests on the plate.
+    Calib_Params params = params_in;
+    if (params.mode != CalibMode::Calib_PA_Tower)
+        params.extra_filament_id = 0;
+    size_t obj_idx = 0;
+    if (!begin_calibration(calib_pa_name, params, obj_idx))
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     auto print_config = &wxGetApp().preset_bundle->prints.get_edited_preset().config;
     auto printer_config = &wxGetApp().preset_bundle->printers.get_edited_preset().config;
@@ -16094,11 +16167,11 @@ void Plater::calib_pa(const Calib_Params& params)
             _calib_pa_pattern(params);
             break;
         case CalibMode::Calib_PA_Tower:
-            _calib_pa_tower(params);
+            _calib_pa_tower(params, obj_idx);
             break;
         default: break;
     }
-    p->background_process.fff_print()->set_calib_params(params);
+    finish_calibration(obj_idx, params);
 }
 
 void Plater::_calib_pa_pattern(const Calib_Params& params)
@@ -16359,7 +16432,7 @@ void Plater::cut_horizontal(size_t obj_idx, size_t instance_idx, double z, Model
     apply_cut_object_to_model(obj_idx, new_objects);
 }
 
-void Plater::_calib_pa_tower(const Calib_Params& params) {
+void Plater::_calib_pa_tower(const Calib_Params& params, size_t obj_idx) {
     if (!add_model(false, Slic3r::resources_dir() + "/calib/pressure_advance/tower_with_seam.drc"))
         return;
 
@@ -16370,10 +16443,12 @@ void Plater::_calib_pa_tower(const Calib_Params& params) {
     const double nozzle_diameter = printer_config->option<ConfigOptionFloats>("nozzle_diameter")->get_at(0);
 
     print_config.set_key_value("enable_wrapping_detection", new ConfigOptionBool(false));
-    filament_config->set_key_value("slow_down_layer_time", new ConfigOptionFloats{ 1.0f });
+    // An extra tower prints with another filament than the edited one.
+    if (obj_idx == 0)
+        filament_config->set_key_value("slow_down_layer_time", new ConfigOptionFloats{ 1.0f });
 
 
-    auto& obj_cfg = model().objects[0]->config;
+    auto& obj_cfg = model().objects[obj_idx]->config;
 
     obj_cfg.set_key_value("alternate_extra_wall", new ConfigOptionBool(false));
     auto full_config = wxGetApp().preset_bundle->full_config();
@@ -16391,7 +16466,7 @@ void Plater::_calib_pa_tower(const Calib_Params& params) {
     obj_cfg.set_key_value("seam_slope_type", new ConfigOptionEnum<SeamScarfType>(SeamScarfType::None));
     print_config.set_key_value("max_volumetric_extrusion_rate_slope", new ConfigOptionFloat(0));
 
-    changed_objects({ 0 });
+    changed_objects({ obj_idx });
     wxGetApp().get_tab(Preset::TYPE_PRINT)->update_dirty();
     wxGetApp().get_tab(Preset::TYPE_FILAMENT)->update_dirty();
     wxGetApp().get_tab(Preset::TYPE_PRINTER)->update_dirty();
@@ -16400,21 +16475,21 @@ void Plater::_calib_pa_tower(const Calib_Params& params) {
     wxGetApp().get_tab(Preset::TYPE_PRINTER)->reload_config();
 
     auto new_height = std::ceil((params.end - params.start) / params.step) + 1;
-    auto obj_bb = model().objects[0]->bounding_box_exact();
+    auto obj_bb = model().objects[obj_idx]->bounding_box_exact();
     if (new_height < obj_bb.size().z()) {
-        cut_horizontal(0, 0, new_height, ModelObjectCutAttribute::KeepLower);
+        cut_horizontal(obj_idx, 0, new_height, ModelObjectCutAttribute::KeepLower);
     }
 
-    _calib_pa_select_added_objects();
+    _calib_pa_select_added_objects(obj_idx);
 }
 
-void Plater::_calib_pa_select_added_objects() {
+void Plater::_calib_pa_select_added_objects(size_t obj_idx) {
     // update printable state for new volumes on canvas3D
-    wxGetApp().plater()->canvas3D()->update_instance_printable_state_for_objects({0});
+    wxGetApp().plater()->canvas3D()->update_instance_printable_state_for_objects({obj_idx});
 
     Selection& selection = p->view3D->get_canvas3d()->get_selection();
     selection.clear();
-    selection.add_object(0, false);
+    selection.add_object(unsigned(obj_idx), false);
 
     // BBS: update object list selection
     p->sidebar->obj_list()->update_selections();
@@ -16428,7 +16503,8 @@ void Plater::_calib_pa_select_added_objects() {
 // Adjust settings for flowrate calibration
 // For linear mode, pass 1 means normal version while pass 2 mean "for perfectionists" version
 // ORCA: Add pattern parameter
-void adjust_settings_for_flowrate_calib(ModelObjectPtrs& objects, bool linear, int pass, InfillPattern pattern)
+// base_flow_ratio: flow ratio of the filament the objects print with, 0 for the edited filament preset.
+void adjust_settings_for_flowrate_calib(ModelObjectPtrs& objects, bool linear, int pass, InfillPattern pattern, double base_flow_ratio = 0.)
 {
     auto print_config = &wxGetApp().preset_bundle->prints.get_edited_preset().config;
     auto printer_config  = &wxGetApp().preset_bundle->printers.get_edited_preset().config;
@@ -16463,7 +16539,8 @@ void adjust_settings_for_flowrate_calib(ModelObjectPtrs& objects, bool linear, i
     }
     canvas->do_scale("");
 
-    auto cur_flowrate = filament_config->option<ConfigOptionFloats>("filament_flow_ratio")->get_at(0); // TODO: per-filament param
+    auto cur_flowrate = base_flow_ratio > 0. ? base_flow_ratio :
+                                               filament_config->option<ConfigOptionFloats>("filament_flow_ratio")->get_at(0); // TODO: per-filament param
     std::vector<double> internal_solid_speeds = generate_max_speed_parameter_value("internal_solid_infill_speed", linear, pass);
     std::vector<double> top_surface_speeds = generate_max_speed_parameter_value("top_surface_speed", linear, pass);
 
@@ -16547,7 +16624,7 @@ void adjust_settings_for_flowrate_calib(ModelObjectPtrs& objects, bool linear, i
 }
 
 // ORCA: Add pattern parameter
-void Plater::calib_flowrate(bool is_linear, int pass, InfillPattern pattern) {
+void Plater::calib_flowrate(bool is_linear, int pass, InfillPattern pattern, int extra_filament_id) {
     if (pass != 1 && pass != 2)
         return;
     wxString calib_name;
@@ -16558,7 +16635,11 @@ void Plater::calib_flowrate(bool is_linear, int pass, InfillPattern pattern) {
     } else
         calib_name = wxString::Format(L"Flowrate Test - Pass%d", pass);
 
-    if (new_project(false, false, calib_name) == wxID_CANCEL)
+    Calib_Params params;
+    params.mode              = CalibMode::Calib_Flow_Rate;
+    params.extra_filament_id = extra_filament_id;
+    size_t obj_idx = 0;
+    if (!begin_calibration(calib_name, params, obj_idx))
         return;
 
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
@@ -16579,15 +16660,26 @@ void Plater::calib_flowrate(bool is_linear, int pass, InfillPattern pattern) {
                       (boost::filesystem::path(Slic3r::resources_dir()) / "calib" / "filament_flow" / "flowrate-test-pass2.3mf").string());
     }
 
+    // An extra test prints with its own filament, so its flow ratios are relative to that filament's.
+    double base_flow_ratio = 0.;
+    if (obj_idx > 0) {
+        const PresetBundle &bundle = *wxGetApp().preset_bundle;
+        if (size_t(extra_filament_id) <= bundle.filament_presets.size())
+            if (const Preset *preset = bundle.filaments.find_preset(bundle.filament_presets[extra_filament_id - 1]))
+                if (const auto *flow_ratio = preset->config.option<ConfigOptionFloats>("filament_flow_ratio"))
+                    base_flow_ratio = flow_ratio->get_at(0);
+    }
+    ModelObjectPtrs test_objects(model().objects.begin() + obj_idx, model().objects.end());
     // ORCA: pass the pattern
-    adjust_settings_for_flowrate_calib(model().objects, is_linear, pass, pattern);
+    adjust_settings_for_flowrate_calib(test_objects, is_linear, pass, pattern, base_flow_ratio);
     wxGetApp().get_tab(Preset::TYPE_PRINTER)->reload_config();
     auto printer_config = &wxGetApp().preset_bundle->printers.get_edited_preset().config;
     printer_config->set_key_value("resonance_avoidance", new ConfigOptionBool{false});
 
     // Refresh object after scaling
-    const std::vector<size_t> object_idx(boost::counting_iterator<size_t>(0), boost::counting_iterator<size_t>(model().objects.size()));
+    const std::vector<size_t> object_idx(boost::counting_iterator<size_t>(obj_idx), boost::counting_iterator<size_t>(model().objects.size()));
     changed_objects(object_idx);
+    finish_calibration(obj_idx, params);
 }
 
 
@@ -16597,10 +16689,12 @@ void Plater::calib_temp(const Calib_Params& params) {
     constexpr int base_temp_tower_temp_step = 5;
 
     const auto calib_temp_name = wxString::Format(L"Nozzle temperature test");
-    new_project(false, false, calib_temp_name);
+    size_t obj_idx = 0;
+    if (!begin_calibration(calib_temp_name, params, obj_idx))
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Temp_Tower) return;
-    
+
     if (!add_model(false, Slic3r::resources_dir() + "/calib/temperature_tower/temperature_tower.drc"))
         return;
     auto printer_config = &wxGetApp().preset_bundle->printers.get_edited_preset().config;
@@ -16620,44 +16714,48 @@ void Plater::calib_temp(const Calib_Params& params) {
     const double block_height = base_temp_tower_block_height;
 
     // cut upper
-    auto obj_bb = model().objects[0]->bounding_box_exact();
+    auto obj_bb = model().objects[obj_idx]->bounding_box_exact();
     auto block_count = lround((500 - params.end) / base_temp_tower_temp_step + 1);
     if (block_count > 0) {
         // subtract EPSILON offset to avoid cutting at the exact location where the flat surface is
         auto new_height = block_count * block_height - EPSILON;
         if (new_height < obj_bb.size().z()) {
-            cut_horizontal(0, 0, new_height, ModelObjectCutAttribute::KeepLower);
+            cut_horizontal(obj_idx, 0, new_height, ModelObjectCutAttribute::KeepLower);
         }
     }
 
     // cut bottom
-    obj_bb = model().objects[0]->bounding_box_exact();
+    obj_bb = model().objects[obj_idx]->bounding_box_exact();
     block_count = lround((500 - params.start) / base_temp_tower_temp_step);
     if (block_count > 0) {
         auto new_height = block_count * block_height + EPSILON;
         if (new_height < obj_bb.size().z()) {
-            cut_horizontal(0, 0, new_height, ModelObjectCutAttribute::KeepUpper);
+            cut_horizontal(obj_idx, 0, new_height, ModelObjectCutAttribute::KeepUpper);
         }
     }
 
+    ModelObject *tower = model().objects[obj_idx];
     if (params.nozzle_based_resize && std::abs(nozzle_scale - 1.0) > EPSILON)
-        model().objects[0]->scale(nozzle_scale, nozzle_scale, nozzle_scale);
+        tower->scale(nozzle_scale, nozzle_scale, nozzle_scale);
 
-    model().objects[0]->ensure_on_bed();
+    tower->ensure_on_bed();
 
     printer_config->set_key_value("resonance_avoidance", new ConfigOptionBool{false});
-    set_config_values<int, ConfigOptionInts>(filament_config, "nozzle_temperature_initial_layer", (int) start_temp);
-    set_config_values<int, ConfigOptionInts>(filament_config, "nozzle_temperature", (int) start_temp);
+    // An extra tower prints with another filament; the G-code sets its temperatures.
+    if (obj_idx == 0) {
+        set_config_values<int, ConfigOptionInts>(filament_config, "nozzle_temperature_initial_layer", (int) start_temp);
+        set_config_values<int, ConfigOptionInts>(filament_config, "nozzle_temperature", (int) start_temp);
+    }
     // When resizing is disabled the 0.4 mm / 0.2 mm reference model is printed as-is (preset layer height kept).
     if (params.nozzle_based_resize)
-        model().objects[0]->config.set_key_value("layer_height", new ConfigOptionFloat(nozzle_diameter/2));
-    model().objects[0]->config.set_key_value("brim_type", new ConfigOptionEnum<BrimType>(btOuterOnly));
-    model().objects[0]->config.set_key_value("brim_width", new ConfigOptionFloat(5.0));
-    model().objects[0]->config.set_key_value("brim_object_gap", new ConfigOptionFloat(0.0));
-    model().objects[0]->config.set_key_value("alternate_extra_wall", new ConfigOptionBool(false));
-    model().objects[0]->config.set_key_value("seam_slope_type", new ConfigOptionEnum<SeamScarfType>(SeamScarfType::None));
-    model().objects[0]->config.set_key_value("overhang_reverse", new ConfigOptionBool(false));
-    model().objects[0]->config.set_key_value("precise_z_height", new ConfigOptionBool(false));
+        tower->config.set_key_value("layer_height", new ConfigOptionFloat(nozzle_diameter/2));
+    tower->config.set_key_value("brim_type", new ConfigOptionEnum<BrimType>(btOuterOnly));
+    tower->config.set_key_value("brim_width", new ConfigOptionFloat(5.0));
+    tower->config.set_key_value("brim_object_gap", new ConfigOptionFloat(0.0));
+    tower->config.set_key_value("alternate_extra_wall", new ConfigOptionBool(false));
+    tower->config.set_key_value("seam_slope_type", new ConfigOptionEnum<SeamScarfType>(SeamScarfType::None));
+    tower->config.set_key_value("overhang_reverse", new ConfigOptionBool(false));
+    tower->config.set_key_value("precise_z_height", new ConfigOptionBool(false));
 
     auto print_config = &wxGetApp().preset_bundle->prints.get_edited_preset().config;
     print_config->set_key_value("enable_wrapping_detection", new ConfigOptionBool(false));
@@ -16665,13 +16763,13 @@ void Plater::calib_temp(const Calib_Params& params) {
         print_config->set_key_value("initial_layer_print_height", new ConfigOptionFloat(nozzle_diameter/2));
 
 
-    changed_objects({ 0 });
+    changed_objects({ obj_idx });
     wxGetApp().get_tab(Preset::TYPE_PRINT)->update_dirty();
     wxGetApp().get_tab(Preset::TYPE_FILAMENT)->update_dirty();
     wxGetApp().get_tab(Preset::TYPE_PRINT)->reload_config();
     wxGetApp().get_tab(Preset::TYPE_FILAMENT)->reload_config();
 
-    p->background_process.fff_print()->set_calib_params(params);
+    finish_calibration(obj_idx, params);
 }
 
 void Plater::calib_max_vol_speed(const Calib_Params& params)
@@ -16756,7 +16854,9 @@ void Plater::calib_max_vol_speed(const Calib_Params& params)
 void Plater::calib_retraction(const Calib_Params& params)
 {
     const auto calib_retraction_name = wxString::Format(L"Retraction");
-    new_project(false, false, calib_retraction_name);
+    size_t obj_idx = 0;
+    if (!begin_calibration(calib_retraction_name, params, obj_idx))
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Retraction_tower)
         return;
@@ -16767,7 +16867,7 @@ void Plater::calib_retraction(const Calib_Params& params)
     auto print_config = &wxGetApp().preset_bundle->prints.get_edited_preset().config;
     auto filament_config = &wxGetApp().preset_bundle->filaments.get_edited_preset().config;
     auto printer_config = &wxGetApp().preset_bundle->printers.get_edited_preset().config;
-    auto obj = model().objects[0];
+    auto obj = model().objects[obj_idx];
 
     print_config->set_key_value("enable_wrapping_detection", new ConfigOptionBool(false));
     print_config->set_key_value("wipe_inward", new ConfigOptionBool(false));
@@ -16803,16 +16903,16 @@ void Plater::calib_retraction(const Calib_Params& params)
     obj->config.set_key_value("seam_slope_type", new ConfigOptionEnum<SeamScarfType>(SeamScarfType::None));
 
 
-    changed_objects({ 0 });
+    changed_objects({ obj_idx });
 
     //  cut upper
     auto obj_bb = obj->bounding_box_exact();
     auto height = 1.0 + 0.4 + ((params.end - params.start)) / params.step - EPSILON;
     if (height < obj_bb.size().z()) {
-        cut_horizontal(0, 0, height, ModelObjectCutAttribute::KeepLower);
+        cut_horizontal(obj_idx, 0, height, ModelObjectCutAttribute::KeepLower);
     }
 
-    p->background_process.fff_print()->set_calib_params(params);
+    finish_calibration(obj_idx, params);
 }
 
 void Plater::calib_VFA(const Calib_Params& params)
