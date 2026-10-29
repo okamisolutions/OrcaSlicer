@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `beta2-alpha`**
+>
+> **O que muda:** As melhorias do beta 1 levadas para o OrcaSlicer 2.5.0-alpha (tag `v2.5.0-alpha`), mais a velocidade de parede da torre de PA extra. Na junção ficou o suporte da alpha a impressoras de esteira e IMEX, e os testes extras são recusados em impressoras de esteira.
+>
+> **Base:** Feita a partir da tag `v2.5.0-alpha` do OrcaSlicer (commit `3880f2c5`).
+>
+> - **Testado:** compilado em 20/10/2026 e usado nas impressões daquele dia, com testes extras e temperatura da mesa por objeto (Windows 11, Kobra 3 V2 com ACE Pro).
+> - **Não testado:** as outras melhorias nesta base; se a Kobra aceita o formato `SET_PRESSURE_ADVANCE ADVANCE=x EXTRUDER=extruder ;` da alpha.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* All the improvements of this fork on OrcaSlicer 2.5.0-alpha. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
