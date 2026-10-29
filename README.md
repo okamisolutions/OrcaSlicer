@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `beta1`**
+>
+> **O que muda:** Todas as melhorias juntas, no estado usado no dia a dia: último filamento, correções do PA, dos diálogos e do cancelar nas calibrações, testes extras na mesa, "Adicionar modelos com outro filamento" e temperatura da mesa por objeto. Cada uma também existe sozinha nas branches `melhoria/*` e `correcao/*`. A velocidade de parede da torre de PA extra, que veio depois, só está no beta 2 e na branch dos testes extras.
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`).
+>
+> - **Testado:** último filamento em uso desde 12/10/2026; testes de PA em linha; testes extras usados em impressões em 16 e 17/10/2026 (Windows 11, Kobra 3 V2 com ACE Pro).
+> - **Não testado:** cancelar, "Adicionar modelos com outro filamento", um teste organizado dos testes extras e a temperatura da mesa por objeto nesta base (ela foi usada no beta 2).
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* All the improvements of this fork together, on OrcaSlicer commit 87a5d20d. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
