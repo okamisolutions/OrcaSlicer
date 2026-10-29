@@ -1048,6 +1048,9 @@ private:
     void _calib_pa_pattern_gen_gcode();
     void _calib_pa_tower(const Calib_Params& params);
     void _calib_pa_select_added_objects();
+    // ORCA: objects added next to the others of the plate, printed by object with their own filament.
+    void place_new_objects_apart(size_t obj_idx, int filament_id);
+    void print_plate_by_object();
 
     void cut_horizontal(size_t obj_idx, size_t instance_idx, double z, ModelObjectCutAttributes attributes);
 

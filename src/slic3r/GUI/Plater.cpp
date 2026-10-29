@@ -15997,6 +15997,84 @@ bool Plater::add_model(bool imperial_units, std::string fname)
     return loaded;
 }
 
+// Objects sharing the plate with their own filament or calibration are printed one after the other.
+void Plater::print_plate_by_object()
+{
+    PartPlate *plate = p->partplate_list.get_curr_plate();
+    if (plate->get_real_print_seq() == PrintSequence::ByObject)
+        return;
+    if (plate->get_print_seq() != PrintSequence::ByDefault)
+        plate->set_print_seq(PrintSequence::ByObject);
+    else {
+        wxGetApp().preset_bundle->prints.get_edited_preset().config.set_key_value("print_sequence",
+            new ConfigOptionEnum<PrintSequence>(PrintSequence::ByObject));
+        wxGetApp().get_tab(Preset::TYPE_PRINT)->update_dirty();
+        wxGetApp().get_tab(Preset::TYPE_PRINT)->reload_config();
+    }
+    get_notification_manager()->push_notification(NotificationType::CustomNotification,
+        NotificationManager::NotificationLevel::RegularNotificationLevel,
+        _u8L("Print sequence set to \"By object\", so that the objects are printed one after the other."));
+}
+
+// Prints the objects from obj_idx on (just added) with filament_id and moves them behind, or else in front of, the
+// other objects of the plate, as far from them as printing by object requires.
+void Plater::place_new_objects_apart(size_t obj_idx, int filament_id)
+{
+    ModelObjectPtrs &objects = model().objects;
+    for (size_t i = obj_idx; i < objects.size(); ++i) {
+        objects[i]->config.set_key_value("extruder", new ConfigOptionInt(filament_id));
+        for (ModelVolume *volume : objects[i]->volumes)
+            if (volume->is_model_part())
+                volume->config.erase("extruder");
+    }
+
+    PartPlate                *plate         = p->partplate_list.get_curr_plate();
+    const BoundingBoxf3       bed           = plate->get_build_volume();
+    const DynamicPrintConfig  config        = wxGetApp().preset_bundle->full_config();
+    const double              nozzle_height = config.opt_float("nozzle_height");
+    BoundingBoxf3             placed, added;
+    bool                      all_short     = true;
+    for (size_t i = 0; i < objects.size(); ++i)
+        for (size_t j = 0; j < objects[i]->instances.size(); ++j) {
+            if (i < obj_idx && !plate->contain_instance(int(i), int(j)))
+                continue;
+            const BoundingBoxf3 box = objects[i]->instance_bounding_box(j);
+            (i < obj_idx ? placed : added).merge(box);
+            all_short = all_short && box.size().z() < nozzle_height;
+        }
+
+    std::vector<size_t> test_objects;
+    for (size_t i = obj_idx; i < objects.size(); ++i)
+        test_objects.push_back(i);
+    if (placed.defined && added.defined) {
+        const double gap    = (all_short ? 0. : config.opt_float("extruder_clearance_radius")) + 10.;
+        const double margin = 2.;
+        const double behind = placed.max.y() + gap - added.min.y();
+        const double front  = placed.min.y() - gap - added.max.y();
+        Vec3d        shift(placed.center().x() - added.center().x(), behind, 0.);
+        bool         fits   = true;
+        if (added.max.y() + behind > bed.max.y() - margin) {
+            if (added.min.y() + front >= bed.min.y() + margin)
+                shift.y() = front;
+            else
+                fits = false;
+        }
+        for (size_t i : test_objects) {
+            for (size_t j = 0; j < objects[i]->instances.size(); ++j) {
+                ModelInstance *instance = objects[i]->instances[j];
+                instance->set_offset(instance->get_offset() + shift);
+                p->partplate_list.notify_instance_update(int(i), int(j));
+            }
+            objects[i]->invalidate_bounding_box();
+        }
+        if (!fits)
+            get_notification_manager()->push_notification(NotificationType::CustomNotification,
+                NotificationManager::NotificationLevel::WarningNotificationLevel,
+                _u8L("There is no room on the plate to keep the new objects far enough from the others. Remove an object or rearrange the plate."));
+    }
+    changed_objects(test_objects);
+}
+
 void Plater::calib_pa(const Calib_Params& params)
 {
     const auto calib_pa_name = wxString::Format(L"Pressure Advance Test");

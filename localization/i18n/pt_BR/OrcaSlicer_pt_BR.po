@@ -19050,6 +19050,18 @@ msgstr ""
 "Há vários endereços IP resolvendo para o nome do host %1%.\n"
 "Por favor, selecione um que deve ser usado."
 
+# AI Translated
+msgid "Print sequence set to \"By object\", so that the objects are printed one after the other."
+msgstr "Sequência de impressão mudada para \"Por objeto\", para imprimir os objetos um depois do outro."
+
+# AI Translated
+msgid ""
+"There is no room on the plate to keep the new objects far enough from the others. Remove an object or "
+"rearrange the plate."
+msgstr ""
+"Não há espaço na mesa para manter os objetos novos longe o suficiente dos outros. Remova um objeto ou "
+"reorganize a mesa."
+
 msgid "Auto-scale for nozzle"
 msgstr "Escala automática para o bico"
 
