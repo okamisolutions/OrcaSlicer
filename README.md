@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `correcao/dialogos-calibracao`**
+>
+> **O que muda:** Os diálogos de calibração (PA, temperatura, vazão máxima, VFA, retração e fluxo) fecham antes de montar o teste. Antes, se a janela principal fosse minimizada nesse meio-tempo, o Windows mostrava o diálogo de novo ao restaurá-la.
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`). Não depende de outra branch.
+>
+> - **Testado:** no beta 1, o diálogo deixou de reaparecer.
+> - **Não testado:** esta branch sozinha só foi compilada. Não foi testada em macOS nem em Linux.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* Calibration dialogs close before the test is set up, so Windows does not show them again when the main window is restored. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
