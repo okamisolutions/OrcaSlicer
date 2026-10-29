@@ -148,6 +148,7 @@ class Sidebar : public wxPanel
     SyncAmsInfoDialog*                      m_sync_dlg{nullptr};
 
     void update_sync_ams_btn_enable(wxUpdateUIEvent &e);
+    void update_last_filament_btn();
 
 public:
     enum DockingState
@@ -215,6 +216,10 @@ public:
     static bool should_show_SEMM_buttons();
     void show_SEMM_buttons();
     void enable_purge_mode_btn(bool enable);
+    // Filament (1 based) the user assigned last. New objects get it instead of filament 1
+    // while the titlebar toggle is on.
+    void remember_last_used_filament(int filament_id);
+    int  filament_for_new_objects() const;
     // Sidebar nozzle-count badge on the extruder cards (multi-nozzle printers only).
     void set_extruder_nozzle_count(int extruder_id, int nozzle_count);
     void enable_nozzle_count_edit(bool enable);
@@ -365,6 +370,9 @@ public:
     void reload_print();
 
     // SoftFever
+    // Makes the filament the calibration test prints with the edited one. Returns false if the
+    // user chose to keep editing the current filament preset.
+    bool edit_filament_preset_for_calibration();
     void calib_pa(const Calib_Params& params);
     //ORCA: Add pattern parameter to calib_flowrate
     void calib_flowrate(bool is_linear, int pass, InfillPattern pattern = ipArchimedeanChords);

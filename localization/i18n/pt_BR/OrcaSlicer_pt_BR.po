@@ -8049,6 +8049,15 @@ msgid "Set filaments to use"
 msgstr "Definir filamentos para usar"
 
 # AI Translated
+msgid "Use the last assigned filament for new objects"
+msgstr "Usar o último filamento atribuído em novos objetos"
+
+# AI Translated
+#, c-format, boost-format
+msgid "Last assigned filament: %d"
+msgstr "Último filamento atribuído: %d"
+
+# AI Translated
 msgid "Add Mixed Filament"
 msgstr "Adicionar Filamento Misto"
 

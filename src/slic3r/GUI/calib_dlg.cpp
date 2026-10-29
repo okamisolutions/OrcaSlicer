@@ -776,6 +776,9 @@ void VFA_Test_Dlg::on_start(wxCommandEvent& event)
     // the requested one. Depending on the "Auto-adjust" option, either fix it automatically or just warn.
     m_params.vfa_layer_height    = 0.0; // 0 = auto (nozzle/2); overridden below when auto-adjusting
     m_params.nozzle_based_resize = m_cbResize->GetValue();
+    // The limits below come from the edited filament preset, which has to be the one the tower prints with.
+    if (!m_plater->edit_filament_preset_for_calibration())
+        return;
     if (const auto* preset_bundle = wxGetApp().preset_bundle) {
         const auto& printer_config  = preset_bundle->printers.get_edited_preset().config;
         const auto& print_config    = preset_bundle->prints.get_edited_preset().config;

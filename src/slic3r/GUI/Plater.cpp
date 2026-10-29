@@ -737,6 +737,7 @@ struct Sidebar::priv
     ScalableButton *  m_bpButton_add_filament;
     ScalableButton *  m_bpButton_del_filament;
     ScalableButton *  m_bpButton_ams_filament;
+    ScalableButton *  m_bpButton_last_filament;
     ScalableButton *  m_bpButton_set_filament;
     int m_menu_filament_id = -1;
 
@@ -2920,7 +2921,7 @@ Sidebar::Sidebar(Plater *parent)
             return;
         // ORCA exclude area of del button from titlebar collapse/expand feature to fix undesired collapse when user spams del filament button
         // also block fold/unfold feature when user clicks to spacing between icons
-        int exclude_pt = p->m_bpButton_set_filament->GetPosition().x; // maximum fixed item
+        int exclude_pt = (p->m_bpButton_last_filament->IsShown() ? p->m_bpButton_last_filament : p->m_bpButton_set_filament)->GetPosition().x; // maximum fixed item
         if      (p->m_purge_mode_btn->IsShown())        exclude_pt = p->m_purge_mode_btn->GetPosition().x;
         else if (p->m_flushing_volume_btn->IsShown())   exclude_pt = p->m_flushing_volume_btn->GetPosition().x;
         else if (p->m_bpButton_add_filament->IsShown()) exclude_pt = p->m_bpButton_add_filament->GetPosition().x - FromDIP(30); // reserve spacing for delete button
@@ -3028,6 +3029,19 @@ Sidebar::Sidebar(Plater *parent)
 
     bSizer39->Add(ams_btn, 0, wxALIGN_CENTER | wxLEFT, FromDIP(SidebarProps::WideSpacing()));
     //bSizer39->Add(FromDIP(10), 0, 0, 0, 0 );
+
+    // ORCA toggle that assigns the last used filament to new objects instead of filament 1
+    ScalableButton* last_btn = new ScalableButton(p->m_panel_filament_title, wxID_ANY, "last_filament_off");
+    last_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent &e) {
+        AppConfig *app_config = wxGetApp().app_config;
+        app_config->set_bool("use_last_filament_for_new_objects", !app_config->get_bool("use_last_filament_for_new_objects"));
+        update_last_filament_btn();
+    });
+    p->m_bpButton_last_filament = last_btn;
+    update_last_filament_btn();
+
+    bSizer39->Add(last_btn, 0, wxALIGN_CENTER | wxLEFT, FromDIP(SidebarProps::WideSpacing()));
+    bSizer39->Hide(last_btn); // ORCA Ensure button is hidden on launch while 1 filament exist
 
     ScalableButton* set_btn = new ScalableButton(p->m_panel_filament_title, wxID_ANY, "settings");
     set_btn->SetToolTip(_L("Set filaments to use"));
@@ -5109,6 +5123,7 @@ void Sidebar::msw_rescale()
     p->m_bpButton_add_filament->msw_rescale();
     p->m_bpButton_del_filament->msw_rescale();
     p->m_bpButton_ams_filament->msw_rescale();
+    p->m_bpButton_last_filament->msw_rescale();
     p->m_bpButton_set_filament->msw_rescale();
     p->m_purge_mode_btn->Rescale();
     p->m_flushing_volume_btn->Rescale();
@@ -5195,6 +5210,7 @@ void Sidebar::sys_color_changed()
     p->m_bpButton_add_filament->msw_rescale();
     p->m_bpButton_del_filament->msw_rescale();
     p->m_bpButton_ams_filament->msw_rescale();
+    p->m_bpButton_last_filament->msw_rescale();
     p->m_bpButton_set_filament->msw_rescale();
     p->m_purge_mode_btn->Rescale();
     p->m_flushing_volume_btn->Rescale();
@@ -5453,6 +5469,13 @@ void Sidebar::delete_filament(size_t filament_id, int replace_filament_id) {
         is_mixed_snapshot = opt->values;
 
     wxGetApp().preset_bundle->update_num_filaments(filament_id);
+
+    // ORCA keep the remembered "last filament" on the same filament after the slots shift
+    if (const int last_filament = atoi(wxGetApp().app_config->get("last_used_filament").c_str()); last_filament > int(filament_id)) {
+        const int replacement = replace_filament_id > int(filament_id) ? replace_filament_id : replace_filament_id + 1;
+        wxGetApp().app_config->set("last_used_filament", std::to_string(last_filament > int(filament_id) + 1 ? last_filament - 1 : std::max(replacement, 1)));
+        update_last_filament_btn();
+    }
 
     // filament_count only counts physical combos, so with mixed slots present it is not the
     // new number of slots; recompute from the shrunk preset list for the downstream updates.
@@ -6112,6 +6135,7 @@ void Sidebar::show_SEMM_buttons()
     p->m_bpButton_add_filament->Show(single_or_bbl);
     p->m_bpButton_del_filament->Show(is_multi);
     p->m_flushing_volume_btn->Show(  is_multi);
+    p->m_bpButton_last_filament->Show(is_multi_material);
 
     if (is_multi) {
         for (auto &c : p->combos_filament)
@@ -6123,6 +6147,37 @@ void Sidebar::show_SEMM_buttons()
     }
 
     Layout();
+}
+
+void Sidebar::update_last_filament_btn()
+{
+    const AppConfig *app_config = wxGetApp().app_config;
+    p->m_bpButton_last_filament->SetBitmap_(app_config->get_bool("use_last_filament_for_new_objects") ? "last_filament_on" : "last_filament_off");
+
+    wxString tooltip = _L("Use the last assigned filament for new objects");
+    if (const int filament_id = atoi(app_config->get("last_used_filament").c_str()); filament_id > 0)
+        tooltip += "\n" + wxString::Format(_L("Last assigned filament: %d"), filament_id);
+    p->m_bpButton_last_filament->SetToolTip(tooltip);
+}
+
+void Sidebar::remember_last_used_filament(int filament_id)
+{
+    // Mixed (virtual) filaments are not remembered: they have no preset of their own to calibrate.
+    if (filament_id < 1 || wxGetApp().preset_bundle->is_mixed_filament(filament_id - 1))
+        return;
+    wxGetApp().app_config->set("last_used_filament", std::to_string(filament_id));
+    update_last_filament_btn();
+}
+
+int Sidebar::filament_for_new_objects() const
+{
+    const AppConfig *app_config = wxGetApp().app_config;
+    if (!app_config->get_bool("use_last_filament_for_new_objects"))
+        return 1;
+    // Fall back to the first filament when the remembered one is not a physical filament of this project.
+    const PresetBundle &preset_bundle = *wxGetApp().preset_bundle;
+    const int           filament_id   = atoi(app_config->get("last_used_filament").c_str());
+    return filament_id >= 1 && filament_id <= int(preset_bundle.filament_presets.size()) && !preset_bundle.is_mixed_filament(filament_id - 1) ? filament_id : 1;
 }
 
 void Sidebar::enable_purge_mode_btn(bool enable)
@@ -8418,6 +8473,33 @@ void read_binary_stl(const std::string& filename, std::string& model_id, std::st
     return;
 }
 
+// ORCA: Give newly imported objects the filament picked by Sidebar::filament_for_new_objects().
+// A model that already carries filament assignments or multi-color painting is left untouched,
+// as moving only its filament 1 would break the relation between its filaments.
+static void assign_filament_to_new_objects(const ModelObjectPtrs &objects, int filament_id)
+{
+    if (filament_id <= 1)
+        return;
+    auto filament_of = [](const ModelConfig &config) { return config.has("extruder") ? config.extruder() : 0; };
+    for (const ModelObject *object : objects) {
+        if (object->is_mm_painted() || filament_of(object->config) > 1)
+            return;
+        // 0 inherits the object's filament, which a modifier overrides with any other value.
+        for (const ModelVolume *volume : object->volumes)
+            if (filament_of(volume->config) > (volume->is_model_part() ? 1 : 0))
+                return;
+        for (const auto &range : object->layer_config_ranges)
+            if (filament_of(range.second) > 0)
+                return;
+    }
+    for (ModelObject *object : objects) {
+        object->config.set_key_value("extruder", new ConfigOptionInt(filament_id));
+        for (ModelVolume *volume : object->volumes)
+            if (volume->is_model_part())
+                volume->config.erase("extruder");
+    }
+}
+
 // BBS: backup & restore
 std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_files,
                                              LoadStrategy strategy,
@@ -9453,6 +9535,8 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
             // BBS: add load_old_project logic
             if ((!is_project_file) && (!load_old_project)) {
                 // if (!is_project_file) {
+                if (!model.texture_mesh) // the texture import below maps the filaments on its own
+                    assign_filament_to_new_objects(model.objects, sidebar->filament_for_new_objects());
                 if (int deleted_objects = model.removed_objects_with_zero_volume(); deleted_objects > 0) {
                     MessageDialog(q, _L("Objects with zero volume removed"), _L("The volume of the object is zero"), wxICON_INFORMATION | wxOK).ShowModal();
                 }
@@ -15997,10 +16081,33 @@ bool Plater::add_model(bool imperial_units, std::string fname)
     return loaded;
 }
 
+// ORCA: Calibrations read and tune the edited filament preset, while their test objects print
+// with Sidebar::filament_for_new_objects(). With the "last filament" toggle on, edit that
+// filament's preset, as "Edit" in the filament's menu does, so both refer to the same filament.
+bool Plater::edit_filament_preset_for_calibration()
+{
+    if (!wxGetApp().app_config->get_bool("use_last_filament_for_new_objects"))
+        return true;
+    PresetBundle &preset_bundle = *wxGetApp().preset_bundle;
+    const size_t  filament_idx  = wxGetApp().sidebar().filament_for_new_objects() - 1;
+    Tab          *tab           = wxGetApp().get_tab(Preset::TYPE_FILAMENT);
+    if (!tab || filament_idx >= preset_bundle.filament_presets.size())
+        return true;
+    const std::string preset_name = preset_bundle.filament_presets[filament_idx];
+    if (preset_name == preset_bundle.filaments.get_selected_preset_name())
+        return true;
+    if (!tab->select_preset(preset_name))
+        return false;
+    tab->get_combo_box()->set_filament_idx(filament_idx);
+    return true;
+}
+
 void Plater::calib_pa(const Calib_Params& params)
 {
     const auto calib_pa_name = wxString::Format(L"Pressure Advance Test");
     new_project(false, false, calib_pa_name);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     auto print_config = &wxGetApp().preset_bundle->prints.get_edited_preset().config;
     auto printer_config = &wxGetApp().preset_bundle->printers.get_edited_preset().config;
@@ -16110,7 +16217,7 @@ void Plater::_calib_pa_pattern(const Calib_Params& params)
         double speed = CalibPressureAdvance::find_optimal_PA_speed(
             wxGetApp().preset_bundle->full_config(),
             print_config.get_abs_value("line_width", nozzle_diameter),
-            print_config.get_abs_value("layer_height"), 0, 0);
+            print_config.get_abs_value("layer_height"), 0, sidebar().filament_for_new_objects() - 1);
         set_config_values<double, ConfigOptionFloatsNullable>(&print_config, "outer_wall_speed", speed);
 
         speeds.assign({speed});
@@ -16480,7 +16587,7 @@ void Plater::calib_flowrate(bool is_linear, int pass, InfillPattern pattern) {
     } else
         calib_name = wxString::Format(L"Flowrate Test - Pass%d", pass);
 
-    if (new_project(false, false, calib_name) == wxID_CANCEL)
+    if (new_project(false, false, calib_name) == wxID_CANCEL || !edit_filament_preset_for_calibration())
         return;
 
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
@@ -16520,6 +16627,8 @@ void Plater::calib_temp(const Calib_Params& params) {
 
     const auto calib_temp_name = wxString::Format(L"Nozzle temperature test");
     new_project(false, false, calib_temp_name);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Temp_Tower) return;
     
@@ -16600,6 +16709,8 @@ void Plater::calib_max_vol_speed(const Calib_Params& params)
 {
     const auto calib_vol_speed_name = wxString::Format(L"Max volumetric speed test");
     new_project(false, false, calib_vol_speed_name);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Vol_speed_Tower)
         return;
@@ -16679,6 +16790,8 @@ void Plater::calib_retraction(const Calib_Params& params)
 {
     const auto calib_retraction_name = wxString::Format(L"Retraction");
     new_project(false, false, calib_retraction_name);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Retraction_tower)
         return;
@@ -16741,6 +16854,8 @@ void Plater::calib_VFA(const Calib_Params& params)
 {
     const auto calib_vfa_name = wxString::Format(L"VFA test");
     new_project(false, false, calib_vfa_name);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_VFA_Tower)
         return;
@@ -16824,6 +16939,8 @@ void Plater::calib_input_shaping_freq(const Calib_Params& params)
 {
     const auto calib_input_shaping_name = wxString::Format(L"Input shaping Frequency test");
     new_project(false, false, calib_input_shaping_name);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Input_shaping_freq)
         return;
@@ -16890,6 +17007,8 @@ void Plater::calib_input_shaping_damp(const Calib_Params& params)
 {
     const auto calib_input_shaping_name = wxString::Format(L"Input shaping Damping test");
     new_project(false, false, calib_input_shaping_name);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Input_shaping_damp)
         return;
@@ -16955,6 +17074,8 @@ void Plater::Calib_Cornering(const Calib_Params& params)
 {
     const auto Calib_Cornering = wxString::Format(L"Cornering test");
     new_project(false, false, Calib_Cornering);
+    if (!edit_filament_preset_for_calibration())
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Cornering)
         return;
