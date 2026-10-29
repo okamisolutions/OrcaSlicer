@@ -16000,7 +16000,8 @@ bool Plater::add_model(bool imperial_units, std::string fname)
 void Plater::calib_pa(const Calib_Params& params)
 {
     const auto calib_pa_name = wxString::Format(L"Pressure Advance Test");
-    new_project(false, false, calib_pa_name);
+    if (new_project(false, false, calib_pa_name) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     auto print_config = &wxGetApp().preset_bundle->prints.get_edited_preset().config;
     auto printer_config = &wxGetApp().preset_bundle->printers.get_edited_preset().config;
@@ -16519,7 +16520,8 @@ void Plater::calib_temp(const Calib_Params& params) {
     constexpr int base_temp_tower_temp_step = 5;
 
     const auto calib_temp_name = wxString::Format(L"Nozzle temperature test");
-    new_project(false, false, calib_temp_name);
+    if (new_project(false, false, calib_temp_name) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Temp_Tower) return;
     
@@ -16599,7 +16601,8 @@ void Plater::calib_temp(const Calib_Params& params) {
 void Plater::calib_max_vol_speed(const Calib_Params& params)
 {
     const auto calib_vol_speed_name = wxString::Format(L"Max volumetric speed test");
-    new_project(false, false, calib_vol_speed_name);
+    if (new_project(false, false, calib_vol_speed_name) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Vol_speed_Tower)
         return;
@@ -16678,7 +16681,8 @@ void Plater::calib_max_vol_speed(const Calib_Params& params)
 void Plater::calib_retraction(const Calib_Params& params)
 {
     const auto calib_retraction_name = wxString::Format(L"Retraction");
-    new_project(false, false, calib_retraction_name);
+    if (new_project(false, false, calib_retraction_name) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Retraction_tower)
         return;
@@ -16740,7 +16744,8 @@ void Plater::calib_retraction(const Calib_Params& params)
 void Plater::calib_VFA(const Calib_Params& params)
 {
     const auto calib_vfa_name = wxString::Format(L"VFA test");
-    new_project(false, false, calib_vfa_name);
+    if (new_project(false, false, calib_vfa_name) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_VFA_Tower)
         return;
@@ -16823,7 +16828,8 @@ void Plater::calib_VFA(const Calib_Params& params)
 void Plater::calib_input_shaping_freq(const Calib_Params& params)
 {
     const auto calib_input_shaping_name = wxString::Format(L"Input shaping Frequency test");
-    new_project(false, false, calib_input_shaping_name);
+    if (new_project(false, false, calib_input_shaping_name) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Input_shaping_freq)
         return;
@@ -16889,7 +16895,8 @@ void Plater::calib_input_shaping_freq(const Calib_Params& params)
 void Plater::calib_input_shaping_damp(const Calib_Params& params)
 {
     const auto calib_input_shaping_name = wxString::Format(L"Input shaping Damping test");
-    new_project(false, false, calib_input_shaping_name);
+    if (new_project(false, false, calib_input_shaping_name) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Input_shaping_damp)
         return;
@@ -16954,7 +16961,8 @@ void Plater::calib_input_shaping_damp(const Calib_Params& params)
 void Plater::Calib_Cornering(const Calib_Params& params)
 {
     const auto Calib_Cornering = wxString::Format(L"Cornering test");
-    new_project(false, false, Calib_Cornering);
+    if (new_project(false, false, Calib_Cornering) == wxID_CANCEL)
+        return;
     wxGetApp().mainframe->select_tab(TAB_ID_PREPARE);
     if (params.mode != CalibMode::Calib_Cornering)
         return;
