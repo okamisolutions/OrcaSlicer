@@ -3889,7 +3889,10 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
 
         CalibPressureAdvanceLine pa_test(this);
 
-        auto fast_speed = CalibPressureAdvance::find_optimal_PA_speed(print.full_print_config(), pa_test.line_width(), pa_test.height_layer());
+        // Cap the speed with the volumetric limit of the filament that prints the lines.
+        const Extruder *pa_filament = m_writer.filament();
+        auto fast_speed = CalibPressureAdvance::find_optimal_PA_speed(print.full_print_config(), pa_test.line_width(), pa_test.height_layer(), 0,
+                                                                      pa_filament ? int(pa_filament->id()) : 0);
         auto slow_speed = std::max(10.0, fast_speed / 10.0);
         if (fast_speed < slow_speed + 5)
             fast_speed = slow_speed + 5;

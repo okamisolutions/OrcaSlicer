@@ -238,6 +238,9 @@ protected:
 
     Vec3d m_last_pos;
     DynamicPrintConfig m_config;
+    // Zero based indices of the filament the test is printed with and of its extruder (nozzle).
+    size_t m_filament_idx{0};
+    size_t m_extruder_idx{0};
 
     const double m_encroachment{1. / 3.};
     DrawDigitMode                m_draw_digit_mode{DrawDigitMode::Left_To_Right};
