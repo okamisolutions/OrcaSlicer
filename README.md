@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `melhoria/ultimo-filamento`**
+>
+> **O que muda:** Um botão na barra de filamentos faz os objetos novos (importados, criados ou de calibração) receberem o último filamento atribuído, em vez do filamento 1. Com o botão ligado, as calibrações editam o preset desse filamento.
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`). Não depende de outra branch.
+>
+> - **Testado:** em uso desde 12/10/2026 dentro do beta 1, no Windows 11, com uma Anycubic Kobra 3 V2 e ACE Pro, sem falha relatada.
+> - **Não testado:** esta branch sozinha só foi compilada. Não foi testada em macOS nem em Linux.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* A filament-bar toggle gives new objects the last assigned filament instead of filament 1; calibrations then tune that filament's preset. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
