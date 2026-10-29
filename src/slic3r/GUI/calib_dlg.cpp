@@ -324,8 +324,10 @@ void PA_Calibration_Dlg::on_start(wxCommandEvent& event) {
         }
     }
 
-    m_plater->calib_pa(m_params);
+    // Close before the test is set up: a dialog hidden while the main window is minimized is shown
+    // again by Windows once the main window is restored, without the dialog knowing it.
     EndModal(wxID_OK);
+    m_plater->calib_pa(m_params);
 
 }
 void PA_Calibration_Dlg::on_extruder_type_changed(wxCommandEvent& event) {
@@ -499,8 +501,8 @@ void Temp_Calibration_Dlg::on_start(wxCommandEvent& event) {
     m_params.end = end;
     m_params.nozzle_based_resize = m_cbResize->GetValue();
     m_params.mode = CalibMode::Calib_Temp_Tower;
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_temp(m_params);
-    EndModal(wxID_OK);
 
 }
 
@@ -646,8 +648,8 @@ void MaxVolumetricSpeed_Test_Dlg::on_start(wxCommandEvent& event) {
     }
 
     m_params.mode = CalibMode::Calib_Vol_speed_Tower;
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_max_vol_speed(m_params);
-    EndModal(wxID_OK);
 
 }
 
@@ -902,8 +904,8 @@ void VFA_Test_Dlg::on_start(wxCommandEvent& event)
     }
 
     m_params.mode = CalibMode::Calib_VFA_Tower;
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_VFA(m_params);
-    EndModal(wxID_OK);
 }
 
 void VFA_Test_Dlg::on_dpi_changed(const wxRect& suggested_rect)
@@ -1009,8 +1011,8 @@ void Retraction_Test_Dlg::on_start(wxCommandEvent& event) {
     }
 
     m_params.mode = CalibMode::Calib_Retraction_tower;
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_retraction(m_params);
-    EndModal(wxID_OK);
 
 }
 
@@ -1720,8 +1722,8 @@ void FlowRateCalibrationDialog::on_start(wxCommandEvent& event) {
     bool is_linear = (type >= 2);
     int pass = (type % 2) + 1;
 
+    EndModal(wxID_OK); // before the test is set up, see PA_Calibration_Dlg::on_start()
     m_plater->calib_flowrate(is_linear, pass, pattern);
-    EndModal(wxID_OK);
 }
 
 void FlowRateCalibrationDialog::on_dpi_changed(const wxRect& suggested_rect) {
