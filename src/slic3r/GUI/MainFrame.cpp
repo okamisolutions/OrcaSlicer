@@ -2968,6 +2968,10 @@ void MainFrame::init_menubar_as_editor()
             [this](wxCommandEvent&) { if (m_plater) { m_plater->add_model(); } }, "", nullptr,
             [this](){return can_add_models(); }, this);
 #endif
+        append_menu_item(import_menu, wxID_ANY, _L("Import with Another Filament") + dots,
+            _L("Load models printed with the chosen filament, by object, apart from the other objects of the plate"),
+            [this](wxCommandEvent&) { if (m_plater) m_plater->add_models_with_filament(); }, "menu_import", nullptr,
+            [this]() { return can_add_models(); }, this);
         append_menu_item(import_menu, wxID_ANY, _L("Import ZIP Archive") + dots, _L("Load models contained within a ZIP archive"),
             [this](wxCommandEvent&) { if (m_plater) m_plater->import_zip_archive(); }, "menu_import", nullptr,
             [this]() { return can_add_models(); });

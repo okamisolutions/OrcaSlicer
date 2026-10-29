@@ -356,6 +356,8 @@ public:
     void add_file();
     // Returns false when no object was added (e.g. the user cancelled the load dialog).
     bool add_model(bool imperial_units = false, std::string fname = "");
+    // ORCA: asks for a filament, then imports models printed with it, by object, apart from the plate's other objects.
+    void add_models_with_filament();
     void import_zip_archive();
     void import_sl1_archive();
     void extract_config_from_project();

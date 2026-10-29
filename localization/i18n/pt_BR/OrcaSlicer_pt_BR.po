@@ -19062,6 +19062,22 @@ msgstr ""
 "Não há espaço na mesa para manter os objetos novos longe o suficiente dos outros. Remova um objeto ou "
 "reorganize a mesa."
 
+# AI Translated
+msgid "Filament of the new objects:"
+msgstr "Filamento dos objetos novos:"
+
+# AI Translated
+msgid "Add Models with Another Filament"
+msgstr "Adicionar modelos com outro filamento"
+
+# AI Translated
+msgid "Import with Another Filament"
+msgstr "Importar com outro filamento"
+
+# AI Translated
+msgid "Load models printed with the chosen filament, by object, apart from the other objects of the plate"
+msgstr "Carrega modelos impressos com o filamento escolhido, por objeto, afastados dos outros objetos da mesa"
+
 msgid "Auto-scale for nozzle"
 msgstr "Escala automática para o bico"
 

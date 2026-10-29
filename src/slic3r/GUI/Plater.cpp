@@ -28,6 +28,7 @@
 #include <boost/uuid/uuid_io.hpp>
 
 #include <wx/msgdlg.h>
+#include <wx/choicdlg.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/button.h>
@@ -16014,6 +16015,36 @@ void Plater::print_plate_by_object()
     get_notification_manager()->push_notification(NotificationType::CustomNotification,
         NotificationManager::NotificationLevel::RegularNotificationLevel,
         _u8L("Print sequence set to \"By object\", so that the objects are printed one after the other."));
+}
+
+// ORCA: imports models next to the objects already on the plate, printed by object with the filament picked first.
+void Plater::add_models_with_filament()
+{
+    const PresetBundle &bundle = *wxGetApp().preset_bundle;
+    wxArrayString       choices;
+    std::vector<int>    filament_ids;
+    for (size_t i = 0; i < bundle.filament_presets.size(); ++i)
+        if (!bundle.is_mixed_filament(i)) {
+            choices.Add(wxString::Format("%d: %s", int(i + 1), from_u8(bundle.filament_presets[i])));
+            filament_ids.push_back(int(i + 1));
+        }
+    if (filament_ids.empty())
+        return;
+    wxSingleChoiceDialog dlg(this, _L("Filament of the new objects:"), _L("Add Models with Another Filament"), choices);
+    if (dlg.ShowModal() != wxID_OK)
+        return;
+    const int filament_id = filament_ids[dlg.GetSelection()];
+
+    PartPlate *plate      = p->partplate_list.get_curr_plate();
+    bool       plate_used = false;
+    for (size_t i = 0; i < model().objects.size() && !plate_used; ++i)
+        plate_used = plate->contain_instance(int(i), 0);
+    const size_t obj_idx = model().objects.size();
+    if (!add_model(false) || model().objects.size() == obj_idx)
+        return;
+    if (plate_used)
+        print_plate_by_object();
+    place_new_objects_apart(obj_idx, filament_id);
 }
 
 // Prints the objects from obj_idx on (just added) with filament_id and moves them behind, or else in front of, the
