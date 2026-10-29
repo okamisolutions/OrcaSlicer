@@ -16432,6 +16432,27 @@ void Plater::cut_horizontal(size_t obj_idx, size_t instance_idx, double z, Model
     apply_cut_object_to_model(obj_idx, new_objects);
 }
 
+// ORCA: wall speed reaching the max volumetric speed of a filament (1-based, 0 for the edited filament preset), as
+// update_speed_parameter() computes it for the whole print.
+static double calib_max_wall_speed(int filament_id)
+{
+    const PresetBundle       &bundle         = *wxGetApp().preset_bundle;
+    const DynamicPrintConfig &printer_config = bundle.printers.get_edited_preset().config;
+    const DynamicPrintConfig &print_config   = bundle.prints.get_edited_preset().config;
+    const Preset             *filament       = nullptr;
+    if (filament_id > 0 && size_t(filament_id) <= bundle.filament_presets.size())
+        filament = bundle.filaments.find_preset(bundle.filament_presets[filament_id - 1]);
+    const DynamicPrintConfig &filament_config = filament ? filament->config : bundle.filaments.get_edited_preset().config;
+
+    const float nozzle_diameter = printer_config.option<ConfigOptionFloats>("nozzle_diameter")->values[0];
+    const float layer_height    = print_config.option<ConfigOptionFloat>("layer_height")->value;
+    float       line_width      = print_config.get_abs_value("line_width", nozzle_diameter);
+    if (line_width <= 0.)
+        line_width = Flow::auto_extrusion_width(frPerimeter, nozzle_diameter);
+    const double max_volumetric_speed = filament_config.option<ConfigOptionFloats>("filament_max_volumetric_speed")->get_at(0);
+    return max_volumetric_speed / Flow(line_width, layer_height, nozzle_diameter).mm3_per_mm();
+}
+
 void Plater::_calib_pa_tower(const Calib_Params& params, size_t obj_idx) {
     if (!add_model(false, Slic3r::resources_dir() + "/calib/pressure_advance/tower_with_seam.drc"))
         return;
@@ -16452,8 +16473,15 @@ void Plater::_calib_pa_tower(const Calib_Params& params, size_t obj_idx) {
 
     obj_cfg.set_key_value("alternate_extra_wall", new ConfigOptionBool(false));
     auto full_config = wxGetApp().preset_bundle->full_config();
-    update_speed_parameter("outer_wall_speed");
-    update_speed_parameter("inner_wall_speed");
+    // An extra tower gets its fast walls as object settings, so that the other tests of the plate keep their speed.
+    if (obj_idx == 0) {
+        update_speed_parameter("outer_wall_speed");
+        update_speed_parameter("inner_wall_speed");
+    } else {
+        const double max_speed = calib_max_wall_speed(params.extra_filament_id);
+        obj_cfg.set_key_value("outer_wall_speed", new ConfigOptionFloatsNullable({max_speed}));
+        obj_cfg.set_key_value("inner_wall_speed", new ConfigOptionFloatsNullable({max_speed}));
+    }
     obj_cfg.set_key_value("seam_position", new ConfigOptionEnum<SeamPosition>(spRear));
     obj_cfg.set_key_value("wall_loops", new ConfigOptionInt(2));
     obj_cfg.set_key_value("top_shell_layers", new ConfigOptionInt(0));
