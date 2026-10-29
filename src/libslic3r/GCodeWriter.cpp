@@ -507,16 +507,18 @@ std::string GCodeWriter::set_pressure_advance(double pa) const
         gcode << "M900 K" <<std::setprecision(4)<< pa << " L1000 M10 ; Override pressure advance value\n";
     }
     else{
+        // Keep a space before the comment: some Klipper derived firmwares (Anycubic GoKlipper) do not
+        // strip it and read "0.04;" as the value, which sets the pressure advance to zero.
         if (FLAVOR_IS(gcfKlipper))
-            gcode << "SET_PRESSURE_ADVANCE ADVANCE=" << std::setprecision(4) << pa << "; Override pressure advance value\n";
+            gcode << "SET_PRESSURE_ADVANCE ADVANCE=" << std::setprecision(4) << pa << " ; Override pressure advance value\n";
         else if(FLAVOR_IS(gcfRepRapFirmware))
-            gcode << ("M572 D0 S") << std::setprecision(4) << pa << "; Override pressure advance value\n";
+            gcode << ("M572 D0 S") << std::setprecision(4) << pa << " ; Override pressure advance value\n";
         else if (FLAVOR_IS(gcfRepetier))
             // Repetier M233: X is quadratic (K), Y is linear (L).
             // Applying the value to both parameters simultaneously.
             gcode << "M233 X" << std::setprecision(4) << pa << " Y" << std::setprecision(4) << pa << " ; Override pressure advance value\n";
         else
-            gcode << "M900 K" <<std::setprecision(4)<< pa << "; Override pressure advance value\n";
+            gcode << "M900 K" <<std::setprecision(4)<< pa << " ; Override pressure advance value\n";
     }
     return gcode.str();
 }
