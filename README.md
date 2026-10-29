@@ -1,3 +1,19 @@
+> [!WARNING]
+> **Fork de [OrcaSlicer/OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), branch `correcao/cancelar-calibracao`**
+>
+> **O que muda:** Com um projeto aberto, cancelar a pergunta de salvar o projeto agora interrompe a calibração. Antes, o teste era montado sobre o projeto aberto: os cortes e ajustes iam para o primeiro objeto da mesa, e a torre nova ficava com a altura inteira.
+>
+> **Base:** Feita a partir do OrcaSlicer original (commit `87a5d20d`). Não depende de outra branch.
+>
+> - **Testado:** nada ainda. A correção foi compilada, mas não foi testada.
+> - **Não testado:** o cancelamento em cada um dos 8 testes que mudaram.
+>
+> Projeto beta, em desenvolvimento e ainda não comprovado.
+>
+> Desenvolvido por Raul Ponce Quaresma com assistência de ferramentas de IA. Este fork segue a licença AGPL-3.0 do OrcaSlicer (veja `LICENSE.txt`).
+>
+> *In English:* Cancelling the save-project prompt now aborts the calibration, instead of adding the test to the open project and tuning object 0. Beta, work in progress, not proven yet. Developed by Raul Ponce Quaresma with the help of AI tools. AGPL-3.0, like OrcaSlicer.
+
 <div align="center">
 
 <picture>
